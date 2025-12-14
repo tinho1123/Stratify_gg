@@ -11,7 +11,7 @@ export default function HomeLayout() {
                 name="index"
                 options={{
                     headerShown: false,
-                    title: "Home"
+                    title: "Dashboard"
                 }}
             />
         </Stack>
