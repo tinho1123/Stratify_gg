@@ -3,6 +3,7 @@
  * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
  */
 
+import { DarkTheme } from '@react-navigation/native';
 import { Platform } from 'react-native';
 
 const tintColorLight = '#0a7ea4';
@@ -18,10 +19,13 @@ export const Colors = {
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: DarkTheme.colors.text,
+    background: DarkTheme.colors.background,
     tint: tintColorDark,
     icon: '#9BA1A6',
+    card: DarkTheme.colors.card,
+    border: DarkTheme.colors.border,
+    notification: DarkTheme.colors.notification,
     tabIconDefault: '#9BA1A6',
     tabIconSelected: tintColorDark,
   },
