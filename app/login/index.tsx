@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -20,11 +20,13 @@ export default function LoginScreen() {
   const [emailFocused, setEmailFocused] = useState<boolean>(false);
   const [passwordFocused, setPasswordFocused] = useState<boolean>(false);
 
-  const handleLogin = () => {
+  const handleLogin = (): void => {
     if (email === "carvalho.cwell@gmail.com" && password === "123") {
-      return <Redirect href="/dashboard" />;
+      router.replace("/dashboard");
+      return;
     }
-    console.log("Login:", { email, password });
+
+    console.log("Login inválido", { email, password });
   };
 
   return (
