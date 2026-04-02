@@ -3,6 +3,7 @@ import { router } from "expo-router";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -34,7 +35,11 @@ export default function LoginScreen() {
     const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (loginError) {
-      setError("E-mail ou senha inválidos.");
+      if (loginError.message.toLowerCase().includes("email not confirmed")) {
+        setError("Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.");
+      } else {
+        setError("E-mail ou senha inválidos.");
+      }
       return;
     }
     router.replace("/dashboard");
@@ -42,55 +47,34 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+      <StatusBar barStyle="light-content" backgroundColor="#0D0D0D" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Efeitos de fundo */}
-          <View style={styles.bgEffect1} />
-          <View style={styles.bgEffect2} />
-          <View style={styles.bgEffect3} />
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.bgGlow} />
 
-          {/* Grid lines decoration */}
-          <View style={styles.gridLines}>
-            <View style={styles.gridLineHorizontal} />
-            <View style={styles.gridLineVertical} />
-          </View>
-
-          {/* Header com tema gaming */}
+          {/* Header */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <View style={styles.logo}>
-                <Text style={styles.logoText}>⚡</Text>
-              </View>
-              <View style={styles.logoGlow} />
-            </View>
-            <Text style={styles.title}>ESPORTS MANAGER</Text>
-            <Text style={styles.subtitle}>
-              CONQUISTE O TOPO DA CLASSIFICAÇÃO
-            </Text>
-            <View style={styles.dividerGreen} />
+            <Image
+              source={require("@/assets/images/stratify-logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.title}>STRATIFY</Text>
+            <Text style={styles.subtitle}>Gerencie seu time. Conquiste o topo.</Text>
           </View>
 
-          {/* Formulário com tema cyberpunk */}
-          <View style={styles.formContainer}>
-            <View style={styles.formHeader}>
-              <Text style={styles.formTitle}>LOGIN</Text>
-              <View style={styles.formAccent} />
-            </View>
-
-            {/* Email Input */}
+          {/* Form */}
+          <View style={styles.form}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>▸ EMAIL</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  emailFocused && styles.inputWrapperFocused,
-                ]}
-              >
-                <View style={styles.inputBorder} />
+              <Text style={styles.label}>E-mail</Text>
+              <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                 <TextInput
                   style={styles.input}
                   placeholder="usuario@esports.gg"
@@ -102,20 +86,12 @@ export default function LoginScreen() {
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
-                {emailFocused && <View style={styles.inputGlow} />}
               </View>
             </View>
 
-            {/* Password Input */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>▸ SENHA</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  passwordFocused && styles.inputWrapperFocused,
-                ]}
-              >
-                <View style={styles.inputBorder} />
+              <Text style={styles.label}>Senha</Text>
+              <View style={[styles.inputWrapper, passwordFocused && styles.inputFocused]}>
                 <TextInput
                   style={styles.input}
                   placeholder="••••••••"
@@ -128,85 +104,49 @@ export default function LoginScreen() {
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
+                  style={styles.eyeButton}
                 >
-                  <Text style={styles.eyeIconText}>
-                    {showPassword ? "👁️" : "🔒"}
-                  </Text>
+                  <Text style={styles.eyeButtonText}>{showPassword ? "👁" : "🙈"}</Text>
                 </TouchableOpacity>
-                {passwordFocused && <View style={styles.inputGlow} />}
               </View>
             </View>
 
-            {/* Options */}
-            <View style={styles.optionsRow}>
-              <TouchableOpacity style={styles.rememberMe}>
-                <View style={styles.checkbox} />
-                <Text style={styles.rememberMeText}>Manter conectado</Text>
-              </TouchableOpacity>
-              <TouchableOpacity>
-                <Text style={styles.forgotPassword}>Recuperar conta</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.forgotRow}
+              onPress={() => router.push("/login/forgot-password")}
+            >
+              <Text style={styles.forgotText}>Esqueceu a senha?</Text>
+            </TouchableOpacity>
 
             {error && (
               <View style={styles.errorBox}>
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorText}>⚠ {error}</Text>
               </View>
             )}
 
-            {/* Login Button */}
             <TouchableOpacity
               style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
               disabled={loading}
             >
-              <View style={styles.buttonGlow} />
               {loading ? (
                 <View style={styles.loadingRow}>
-                  <ActivityIndicator size="small" color="#000000" />
-                  <Text style={styles.loginButtonText}>ENTRANDO...</Text>
+                  <ActivityIndicator size="small" color="#000" />
+                  <Text style={styles.loginButtonText}>Entrando...</Text>
                 </View>
               ) : (
-                <Text style={styles.loginButtonText}>[ ENTRAR NO JOGO ]</Text>
+                <Text style={styles.loginButtonText}>Entrar</Text>
               )}
-              <View style={styles.buttonCorner1} />
-              <View style={styles.buttonCorner2} />
-              <View style={styles.buttonCorner3} />
-              <View style={styles.buttonCorner4} />
             </TouchableOpacity>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OU</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social Login */}
-            <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-              <Text style={styles.socialButtonIcon}>🎮</Text>
-              <Text style={styles.socialButtonText}>CONECTAR COM STEAM</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.socialButton} activeOpacity={0.7}>
-              <Text style={styles.socialButtonIcon}>🎯</Text>
-              <Text style={styles.socialButtonText}>CONECTAR COM DISCORD</Text>
-            </TouchableOpacity>
-
-            {/* Sign Up */}
-            <View style={styles.signupRow}>
-              <Text style={styles.signupText}>Novo jogador? </Text>
-              <TouchableOpacity onPress={() => router.push("/login/signup")}>
-                <Text style={styles.signupLink}>CRIAR CONTA</Text>
-              </TouchableOpacity>
-            </View>
           </View>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>v1.0.0 | ALPHA BUILD</Text>
+          <View style={styles.signupRow}>
+            <Text style={styles.signupText}>Novo por aqui? </Text>
+            <TouchableOpacity onPress={() => router.push("/login/signup")}>
+              <Text style={styles.signupLink}>Criar conta</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -217,372 +157,105 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#0D0D0D",
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
     justifyContent: "center",
   },
-  // Efeitos de fundo
-  bgEffect1: {
+  bgGlow: {
     position: "absolute",
-    top: -100,
-    left: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
+    top: -120,
+    alignSelf: "center",
+    width: 360,
+    height: 360,
+    borderRadius: 180,
     backgroundColor: "#10B981",
-    opacity: 0.1,
+    opacity: 0.07,
   },
-  bgEffect2: {
-    position: "absolute",
-    bottom: -50,
-    right: -50,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: "#10B981",
-    opacity: 0.08,
-  },
-  bgEffect3: {
-    position: "absolute",
-    top: "50%",
-    left: "50%",
-    width: 400,
-    height: 400,
-    borderRadius: 200,
-    backgroundColor: "#10B981",
-    opacity: 0.03,
-    marginLeft: -200,
-    marginTop: -200,
-  },
-  gridLines: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gridLineHorizontal: {
-    position: "absolute",
-    top: "30%",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "#10B981",
-    opacity: 0.1,
-  },
-  gridLineVertical: {
-    position: "absolute",
-    left: "50%",
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "#10B981",
-    opacity: 0.1,
-  },
-  // Header
   header: {
     alignItems: "center",
-    marginBottom: 40,
-  },
-  logoContainer: {
-    position: "relative",
-    marginBottom: 20,
+    marginBottom: 36,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    backgroundColor: "#000000",
-    borderWidth: 3,
-    borderColor: "#10B981",
-    justifyContent: "center",
-    alignItems: "center",
-    transform: [{ rotate: "45deg" }],
-  },
-  logoText: {
-    fontSize: 50,
-    transform: [{ rotate: "-45deg" }],
-  },
-  logoGlow: {
-    position: "absolute",
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    backgroundColor: "#10B981",
-    opacity: 0.2,
-    transform: [{ rotate: "45deg" }],
+    width: 72,
+    height: 72,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 4,
-    textShadowColor: "#10B981",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 6,
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#6B7280",
-    letterSpacing: 2,
-    marginTop: 8,
-    fontWeight: "600",
+    letterSpacing: 0.3,
   },
-  dividerGreen: {
-    width: 100,
-    height: 2,
-    backgroundColor: "#10B981",
-    marginTop: 16,
-  },
-  // Formulário
-  formContainer: {
-    backgroundColor: "#0A0A0A",
-    borderRadius: 4,
+  form: {
+    backgroundColor: "#161616",
+    borderRadius: 16,
     padding: 24,
-    borderWidth: 2,
-    borderColor: "#1F1F1F",
-    borderLeftWidth: 4,
-    borderLeftColor: "#10B981",
-  },
-  formHeader: {
+    borderWidth: 1,
+    borderColor: "#242424",
     marginBottom: 24,
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 3,
-  },
-  formAccent: {
-    width: 60,
-    height: 2,
-    backgroundColor: "#10B981",
-    marginTop: 4,
   },
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#9CA3AF",
     marginBottom: 8,
-    letterSpacing: 1,
   },
   inputWrapper: {
-    position: "relative",
-    backgroundColor: "#000000",
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0D0D0D",
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: "#2A2A2A",
   },
-  inputWrapperFocused: {
+  inputFocused: {
     borderColor: "#10B981",
-  },
-  inputBorder: {
-    position: "absolute",
-    top: -2,
-    left: -2,
-    right: -2,
-    bottom: -2,
-    borderWidth: 1,
-    borderColor: "transparent",
-    borderRadius: 4,
-  },
-  inputGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "#10B981",
-    shadowColor: "#10B981",
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 8,
   },
   input: {
+    flex: 1,
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 15,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
-  eyeIcon: {
-    position: "absolute",
-    right: 12,
-    top: "50%",
-    marginTop: -12,
-  },
-  eyeIconText: {
-    fontSize: 20,
-  },
-  optionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  rememberMe: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  checkbox: {
-    width: 16,
-    height: 16,
-    borderWidth: 2,
-    borderColor: "#10B981",
-    marginRight: 8,
-  },
-  rememberMeText: {
-    color: "#6B7280",
-    fontSize: 12,
-  },
-  forgotPassword: {
-    color: "#10B981",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  loginButton: {
-    position: "relative",
-    backgroundColor: "#10B981",
-    paddingVertical: 16,
-    borderRadius: 4,
-    alignItems: "center",
-    marginBottom: 24,
-    overflow: "hidden",
-  },
-  buttonGlow: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.1,
-  },
-  loginButtonText: {
-    color: "#000000",
-    fontSize: 16,
-    fontWeight: "bold",
-    letterSpacing: 2,
-  },
-  buttonCorner1: {
-    position: "absolute",
-    top: -2,
-    left: -2,
-    width: 20,
-    height: 20,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  buttonCorner2: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  buttonCorner3: {
-    position: "absolute",
-    bottom: -2,
-    left: -2,
-    width: 20,
-    height: 20,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  buttonCorner4: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderColor: "#FFFFFF",
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#1F1F1F",
-  },
-  dividerText: {
-    color: "#4B5563",
-    fontSize: 12,
-    marginHorizontal: 12,
-    letterSpacing: 2,
-  },
-  socialButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#000000",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-    borderRadius: 4,
+  eyeButton: {
+    paddingHorizontal: 14,
     paddingVertical: 14,
-    marginBottom: 12,
   },
-  socialButtonIcon: {
-    fontSize: 20,
-    marginRight: 12,
+  eyeButtonText: {
+    fontSize: 17,
   },
-  socialButtonText: {
-    color: "#6B7280",
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 1,
+  forgotRow: {
+    alignSelf: "flex-end",
+    marginBottom: 20,
+    marginTop: 2,
   },
-  signupRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 12,
-  },
-  signupText: {
-    color: "#4B5563",
-    fontSize: 13,
-  },
-  signupLink: {
+  forgotText: {
     color: "#10B981",
     fontSize: 13,
-    fontWeight: "bold",
-    letterSpacing: 1,
-  },
-  footer: {
-    marginTop: 40,
-    alignItems: "center",
-  },
-  footerText: {
-    color: "#1F1F1F",
-    fontSize: 10,
-    letterSpacing: 2,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    fontWeight: "500",
   },
   errorBox: {
-    backgroundColor: "#EF444420",
+    backgroundColor: "rgba(239,68,68,0.1)",
     borderWidth: 1,
     borderColor: "#EF4444",
-    borderRadius: 4,
+    borderRadius: 8,
     padding: 12,
     marginBottom: 16,
   },
@@ -590,12 +263,39 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 13,
   },
+  loginButton: {
+    backgroundColor: "#10B981",
+    paddingVertical: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 20,
+  },
   loginButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
+  },
+  loginButtonText: {
+    color: "#000000",
+    fontSize: 15,
+    fontWeight: "700",
+    letterSpacing: 0.3,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
+  },
+  signupRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  signupText: {
+    color: "#6B7280",
+    fontSize: 14,
+  },
+  signupLink: {
+    color: "#10B981",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

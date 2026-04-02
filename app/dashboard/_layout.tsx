@@ -30,6 +30,13 @@ export default function DashboardLayout() {
           title: "Training",
         }}
       />
+      <Stack.Screen
+        name="profile"
+        options={{
+          headerShown: false,
+          title: "Profile",
+        }}
+      />
     </Stack>
   );
 }

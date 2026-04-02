@@ -9,7 +9,9 @@ $$;
 
 -- Função principal chamada pelo trigger
 create or replace function create_starter_players()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
 declare
   -- Pool de nomes genéricos de esports
   names text[] := array[
@@ -48,7 +50,7 @@ begin
     chosen_role   := roles[i]; -- cada role uma vez
 
     -- Status ponderado
-    rand := random_int(1, 100);
+    rand := public.random_int(1, 100);
     if rand <= 40 then
       chosen_status := 'online';
     elsif rand <= 75 then
@@ -58,16 +60,16 @@ begin
     end if;
 
     -- Stats baixos
-    v_rating  := random_int(20, 52);
-    v_salary  := random_int(1500, 5000);
-    v_age     := random_int(17, 22);
-    v_energy  := random_int(15, 50);
-    v_morale  := random_int(20, 50);
-    v_form    := random_int(18, 48);
-    v_kills   := random_int(120, 450);
-    v_deaths  := random_int(300, 700);  -- mais deaths do que kills — são ruins
-    v_assists := random_int(60, 220);
-    v_adr     := (random_int(280, 560) / 10.0)::numeric(5,2); -- 28.0–56.0
+    v_rating  := public.random_int(20, 52);
+    v_salary  := public.random_int(1500, 5000);
+    v_age     := public.random_int(17, 22);
+    v_energy  := public.random_int(15, 50);
+    v_morale  := public.random_int(20, 50);
+    v_form    := public.random_int(18, 48);
+    v_kills   := public.random_int(120, 450);
+    v_deaths  := public.random_int(300, 700);  -- mais deaths do que kills — são ruins
+    v_assists := public.random_int(60, 220);
+    v_adr     := (public.random_int(280, 560) / 10.0)::numeric(5,2); -- 28.0–56.0
 
     insert into players (
       user_id, name, role, status, rating, salary,
@@ -81,7 +83,7 @@ begin
       chosen_status,
       v_rating,
       v_salary,
-      random_int(1, 12) || ' meses',
+      public.random_int(1, 12) || ' meses',
       v_age,
       v_energy,
       v_morale,
@@ -96,12 +98,12 @@ begin
     -- Skills igualmente baixas (faixa 15-50)
     insert into player_skills (player_id, skill_name, value)
     values
-      (new_player_id, 'Mira',              random_int(15, 50)),
-      (new_player_id, 'Leitura de Jogo',   random_int(15, 50)),
-      (new_player_id, 'Comunicação',       random_int(15, 50)),
-      (new_player_id, 'Clutch',            random_int(15, 50)),
-      (new_player_id, 'Uso de Utilitários',random_int(15, 50)),
-      (new_player_id, 'Posicionamento',    random_int(15, 50));
+      (new_player_id, 'Mira',              public.random_int(15, 50)),
+      (new_player_id, 'Leitura de Jogo',   public.random_int(15, 50)),
+      (new_player_id, 'Comunicação',       public.random_int(15, 50)),
+      (new_player_id, 'Clutch',            public.random_int(15, 50)),
+      (new_player_id, 'Uso de Utilitários',public.random_int(15, 50)),
+      (new_player_id, 'Posicionamento',    public.random_int(15, 50));
 
   end loop;
 
