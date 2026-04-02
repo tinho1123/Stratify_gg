@@ -1,6 +1,8 @@
+import { supabase } from "@/database/supabase";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -19,14 +21,23 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [emailFocused, setEmailFocused] = useState<boolean>(false);
   const [passwordFocused, setPasswordFocused] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (): void => {
-    if (email === "carvalho.cwell@gmail.com" && password === "123") {
-      router.replace("/dashboard");
+  const handleLogin = async (): Promise<void> => {
+    setError(null);
+    if (!email || !password) {
+      setError("Preencha e-mail e senha.");
       return;
     }
-
-    console.log("Login inválido", { email, password });
+    setLoading(true);
+    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+    setLoading(false);
+    if (loginError) {
+      setError("E-mail ou senha inválidos.");
+      return;
+    }
+    router.replace("/dashboard");
   };
 
   return (
@@ -138,14 +149,28 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
+            {error && (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
             {/* Login Button */}
             <TouchableOpacity
-              style={styles.loginButton}
+              style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
               activeOpacity={0.8}
+              disabled={loading}
             >
               <View style={styles.buttonGlow} />
-              <Text style={styles.loginButtonText}>[ ENTRAR NO JOGO ]</Text>
+              {loading ? (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator size="small" color="#000000" />
+                  <Text style={styles.loginButtonText}>ENTRANDO...</Text>
+                </View>
+              ) : (
+                <Text style={styles.loginButtonText}>[ ENTRAR NO JOGO ]</Text>
+              )}
               <View style={styles.buttonCorner1} />
               <View style={styles.buttonCorner2} />
               <View style={styles.buttonCorner3} />
@@ -173,7 +198,7 @@ export default function LoginScreen() {
             {/* Sign Up */}
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Novo jogador? </Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/login/signup")}>
                 <Text style={styles.signupLink}>CRIAR CONTA</Text>
               </TouchableOpacity>
             </View>
@@ -552,5 +577,25 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 2,
     fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  errorBox: {
+    backgroundColor: "#EF444420",
+    borderWidth: 1,
+    borderColor: "#EF4444",
+    borderRadius: 4,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: "#EF4444",
+    fontSize: 13,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
 });

@@ -1,7 +1,9 @@
+import { supabase } from "@/database/supabase";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Modal,
   ScrollView,
@@ -12,6 +14,11 @@ import {
 } from "react-native";
 
 const { width } = Dimensions.get("window");
+
+interface PlayerSkill {
+  skill_name: string;
+  value: number;
+}
 
 interface Player {
   id: string;
@@ -25,95 +32,91 @@ interface Player {
   energy: number;
   morale: number;
   form: number;
-  stats: {
-    kills: number;
-    deaths: number;
-    assists: number;
-    adr: number;
-  };
+  kills: number;
+  deaths: number;
+  assists: number;
+  adr: number;
+  skills?: PlayerSkill[];
 }
 
+const SKILL_ORDER = [
+  "Mira",
+  "Leitura de Jogo",
+  "Comunicação",
+  "Clutch",
+  "Uso de Utilitários",
+  "Posicionamento",
+];
+
 export default function ManageTeamScreen() {
+  const [players, setPlayers] = useState<Player[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [showPlayerModal, setShowPlayerModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingSkills, setLoadingSkills] = useState(false);
 
-  const players: Player[] = [
-    {
-      id: "1",
-      name: "Alice",
-      role: "IGL",
-      status: "online",
-      rating: 92,
-      salary: 15000,
-      contract: "2 anos",
-      age: 24,
-      energy: 85,
-      morale: 90,
-      form: 88,
-      stats: { kills: 1250, deaths: 980, assists: 450, adr: 82.5 },
-    },
-    {
-      id: "2",
-      name: "Bob",
-      role: "AWPer",
-      status: "online",
-      rating: 88,
-      salary: 18000,
-      contract: "1 ano",
-      age: 22,
-      energy: 75,
-      morale: 85,
-      form: 92,
-      stats: { kills: 1450, deaths: 1020, assists: 320, adr: 88.2 },
-    },
-    {
-      id: "3",
-      name: "Charlie",
-      role: "Support",
-      status: "online",
-      rating: 85,
-      salary: 12000,
-      contract: "3 anos",
-      age: 26,
-      energy: 90,
-      morale: 88,
-      form: 85,
-      stats: { kills: 980, deaths: 950, assists: 680, adr: 75.8 },
-    },
-    {
-      id: "4",
-      name: "Diana",
-      role: "Entry",
-      status: "injured",
-      rating: 90,
-      salary: 16000,
-      contract: "6 meses",
-      age: 21,
-      energy: 30,
-      morale: 60,
-      form: 78,
-      stats: { kills: 1380, deaths: 1100, assists: 420, adr: 85.4 },
-    },
-    {
-      id: "5",
-      name: "Eve",
-      role: "Flex",
-      status: "online",
-      rating: 87,
-      salary: 14000,
-      contract: "1.5 anos",
-      age: 23,
-      energy: 88,
-      morale: 92,
-      form: 90,
-      stats: { kills: 1280, deaths: 1050, assists: 510, adr: 80.3 },
-    },
-  ];
+  const fetchPlayers = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("players")
+      .select("*")
+      .order("name");
 
-  const handlePlayerPress = (player: Player) => {
+    if (!error && data) {
+      setPlayers(data as Player[]);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchPlayers();
+  }, [fetchPlayers]);
+
+  const handlePlayerPress = async (player: Player) => {
     setSelectedPlayer(player);
     setShowPlayerModal(true);
+
+    if (!player.skills) {
+      setLoadingSkills(true);
+      const { data, error } = await supabase
+        .from("player_skills")
+        .select("skill_name, value")
+        .eq("player_id", player.id)
+        .order("skill_name");
+
+      if (!error && data) {
+        const skills = data as PlayerSkill[];
+        const updated = { ...player, skills };
+        setSelectedPlayer(updated);
+        setPlayers((prev) =>
+          prev.map((p) => (p.id === player.id ? updated : p))
+        );
+      }
+      setLoadingSkills(false);
+    }
   };
+
+  const avgRating =
+    players.length > 0
+      ? (players.reduce((s, p) => s + p.rating, 0) / players.length).toFixed(1)
+      : "—";
+
+  const totalSalary = players.reduce((s, p) => s + p.salary, 0);
+
+  const avgMorale =
+    players.length > 0
+      ? Math.round(players.reduce((s, p) => s + p.morale, 0) / players.length)
+      : 0;
+
+  const avgEnergy =
+    players.length > 0
+      ? Math.round(players.reduce((s, p) => s + p.energy, 0) / players.length)
+      : 0;
+
+  const avgForm =
+    players.length > 0
+      ? Math.round(players.reduce((s, p) => s + p.form, 0) / players.length)
+      : 0;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -145,6 +148,18 @@ export default function ManageTeamScreen() {
     }
   };
 
+  const getSkillColor = (value: number) => {
+    if (value >= 90) return "#10B981";
+    if (value >= 75) return "#3B82F6";
+    if (value >= 60) return "#F59E0B";
+    return "#EF4444";
+  };
+
+  const sortedSkills = (skills: PlayerSkill[]) =>
+    [...skills].sort(
+      (a, b) => SKILL_ORDER.indexOf(a.skill_name) - SKILL_ORDER.indexOf(b.skill_name)
+    );
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -154,17 +169,19 @@ export default function ManageTeamScreen() {
 
         <View style={styles.headerStats}>
           <View style={styles.headerStatItem}>
-            <Text style={styles.headerStatValue}>88.4</Text>
+            <Text style={styles.headerStatValue}>{avgRating}</Text>
             <Text style={styles.headerStatLabel}>Rating Médio</Text>
           </View>
           <View style={styles.headerStatDivider} />
           <View style={styles.headerStatItem}>
-            <Text style={styles.headerStatValue}>$75K</Text>
+            <Text style={styles.headerStatValue}>
+              ${(totalSalary / 1000).toFixed(0)}K
+            </Text>
             <Text style={styles.headerStatLabel}>Folha Salarial</Text>
           </View>
           <View style={styles.headerStatDivider} />
           <View style={styles.headerStatItem}>
-            <Text style={styles.headerStatValue}>5/5</Text>
+            <Text style={styles.headerStatValue}>{players.length}/5</Text>
             <Text style={styles.headerStatLabel}>Jogadores</Text>
           </View>
         </View>
@@ -202,19 +219,19 @@ export default function ManageTeamScreen() {
 
           <View style={styles.overviewGrid}>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewValue}>86%</Text>
+              <Text style={styles.overviewValue}>{avgMorale}%</Text>
               <Text style={styles.overviewLabel}>Moral Geral</Text>
-              <View style={[styles.overviewBar, { width: "86%" }]} />
+              <View style={[styles.overviewBar, { width: `${avgMorale}%` }]} />
             </View>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewValue}>82%</Text>
+              <Text style={styles.overviewValue}>{avgEnergy}%</Text>
               <Text style={styles.overviewLabel}>Energia Média</Text>
-              <View style={[styles.overviewBar, { width: "82%" }]} />
+              <View style={[styles.overviewBar, { width: `${avgEnergy}%` }]} />
             </View>
             <View style={styles.overviewCard}>
-              <Text style={styles.overviewValue}>87%</Text>
+              <Text style={styles.overviewValue}>{avgForm}%</Text>
               <Text style={styles.overviewLabel}>Forma Atual</Text>
-              <View style={[styles.overviewBar, { width: "87%" }]} />
+              <View style={[styles.overviewBar, { width: `${avgForm}%` }]} />
             </View>
           </View>
         </View>
@@ -226,118 +243,125 @@ export default function ManageTeamScreen() {
             <View style={styles.sectionAccent} />
           </View>
 
-          {players.map((player) => (
-            <TouchableOpacity
-              key={player.id}
-              style={styles.playerCard}
-              onPress={() => handlePlayerPress(player)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.playerHeader}>
-                <View style={styles.playerBasicInfo}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      { backgroundColor: getStatusColor(player.status) },
-                    ]}
-                  />
-                  <View>
-                    <Text style={styles.playerName}>{player.name}</Text>
-                    <Text style={styles.playerRole}>
-                      {player.role} • {player.age} anos
-                    </Text>
+          {loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#10B981" />
+              <Text style={styles.loadingText}>Carregando jogadores...</Text>
+            </View>
+          ) : (
+            players.map((player) => (
+              <TouchableOpacity
+                key={player.id}
+                style={styles.playerCard}
+                onPress={() => handlePlayerPress(player)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.playerHeader}>
+                  <View style={styles.playerBasicInfo}>
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: getStatusColor(player.status) },
+                      ]}
+                    />
+                    <View>
+                      <Text style={styles.playerName}>{player.name}</Text>
+                      <Text style={styles.playerRole}>
+                        {player.role} • {player.age} anos
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.playerRatingBadge}>
+                    <Text style={styles.playerRatingText}>{player.rating}</Text>
                   </View>
                 </View>
-                <View style={styles.playerRatingBadge}>
-                  <Text style={styles.playerRatingText}>{player.rating}</Text>
-                </View>
-              </View>
 
-              <View
-                style={[
-                  styles.playerStatus,
-                  { backgroundColor: getStatusColor(player.status) + "20" },
-                ]}
-              >
-                <Text
+                <View
                   style={[
-                    styles.playerStatusText,
-                    { color: getStatusColor(player.status) },
+                    styles.playerStatus,
+                    { backgroundColor: getStatusColor(player.status) + "20" },
                   ]}
                 >
-                  {getStatusText(player.status)}
-                </Text>
-              </View>
-
-              <View style={styles.playerStats}>
-                <View style={styles.playerStatItem}>
-                  <Text style={styles.playerStatLabel}>K/D</Text>
-                  <Text style={styles.playerStatValue}>
-                    {(player.stats.kills / player.stats.deaths).toFixed(2)}
+                  <Text
+                    style={[
+                      styles.playerStatusText,
+                      { color: getStatusColor(player.status) },
+                    ]}
+                  >
+                    {getStatusText(player.status)}
                   </Text>
                 </View>
-                <View style={styles.playerStatItem}>
-                  <Text style={styles.playerStatLabel}>ADR</Text>
-                  <Text style={styles.playerStatValue}>{player.stats.adr}</Text>
+
+                <View style={styles.playerStats}>
+                  <View style={styles.playerStatItem}>
+                    <Text style={styles.playerStatLabel}>K/D</Text>
+                    <Text style={styles.playerStatValue}>
+                      {player.deaths > 0
+                        ? (player.kills / player.deaths).toFixed(2)
+                        : "—"}
+                    </Text>
+                  </View>
+                  <View style={styles.playerStatItem}>
+                    <Text style={styles.playerStatLabel}>ADR</Text>
+                    <Text style={styles.playerStatValue}>{player.adr}</Text>
+                  </View>
+                  <View style={styles.playerStatItem}>
+                    <Text style={styles.playerStatLabel}>Assists</Text>
+                    <Text style={styles.playerStatValue}>{player.assists}</Text>
+                  </View>
                 </View>
-                <View style={styles.playerStatItem}>
-                  <Text style={styles.playerStatLabel}>Assists</Text>
-                  <Text style={styles.playerStatValue}>
-                    {player.stats.assists}
+
+                <View style={styles.playerMetrics}>
+                  <View style={styles.metricMini}>
+                    <Text style={styles.metricMiniLabel}>Energia</Text>
+                    <View style={styles.metricMiniBar}>
+                      <View
+                        style={[
+                          styles.metricMiniFill,
+                          { width: `${player.energy}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.metricMini}>
+                    <Text style={styles.metricMiniLabel}>Moral</Text>
+                    <View style={styles.metricMiniBar}>
+                      <View
+                        style={[
+                          styles.metricMiniFill,
+                          { width: `${player.morale}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  <View style={styles.metricMini}>
+                    <Text style={styles.metricMiniLabel}>Forma</Text>
+                    <View style={styles.metricMiniBar}>
+                      <View
+                        style={[
+                          styles.metricMiniFill,
+                          { width: `${player.form}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.playerFooter}>
+                  <Text style={styles.playerContract}>
+                    📄 Contrato: {player.contract}
+                  </Text>
+                  <Text style={styles.playerSalary}>
+                    💰 ${player.salary.toLocaleString()}/mês
                   </Text>
                 </View>
-              </View>
 
-              <View style={styles.playerMetrics}>
-                <View style={styles.metricMini}>
-                  <Text style={styles.metricMiniLabel}>Energia</Text>
-                  <View style={styles.metricMiniBar}>
-                    <View
-                      style={[
-                        styles.metricMiniFill,
-                        { width: `${player.energy}%` },
-                      ]}
-                    />
-                  </View>
+                <View style={styles.playerArrow}>
+                  <Text style={styles.playerArrowText}>›</Text>
                 </View>
-                <View style={styles.metricMini}>
-                  <Text style={styles.metricMiniLabel}>Moral</Text>
-                  <View style={styles.metricMiniBar}>
-                    <View
-                      style={[
-                        styles.metricMiniFill,
-                        { width: `${player.morale}%` },
-                      ]}
-                    />
-                  </View>
-                </View>
-                <View style={styles.metricMini}>
-                  <Text style={styles.metricMiniLabel}>Forma</Text>
-                  <View style={styles.metricMiniBar}>
-                    <View
-                      style={[
-                        styles.metricMiniFill,
-                        { width: `${player.form}%` },
-                      ]}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.playerFooter}>
-                <Text style={styles.playerContract}>
-                  📄 Contrato: {player.contract}
-                </Text>
-                <Text style={styles.playerSalary}>
-                  💰 ${player.salary.toLocaleString()}/mês
-                </Text>
-              </View>
-
-              <View style={styles.playerArrow}>
-                <Text style={styles.playerArrowText}>›</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         <View style={{ height: 40 }} />
@@ -372,6 +396,7 @@ export default function ManageTeamScreen() {
                 </LinearGradient>
 
                 <ScrollView style={styles.modalBody}>
+                  {/* Informações */}
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>INFORMAÇÕES</Text>
                     <View style={styles.modalInfo}>
@@ -395,84 +420,115 @@ export default function ManageTeamScreen() {
                     </View>
                   </View>
 
+                  {/* Estatísticas */}
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>ESTATÍSTICAS</Text>
                     <View style={styles.modalStatsGrid}>
                       <View style={styles.modalStatCard}>
                         <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.kills}
+                          {selectedPlayer.kills}
                         </Text>
                         <Text style={styles.modalStatLabel}>Kills</Text>
                       </View>
                       <View style={styles.modalStatCard}>
                         <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.deaths}
+                          {selectedPlayer.deaths}
                         </Text>
                         <Text style={styles.modalStatLabel}>Deaths</Text>
                       </View>
                       <View style={styles.modalStatCard}>
                         <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.assists}
+                          {selectedPlayer.assists}
                         </Text>
                         <Text style={styles.modalStatLabel}>Assists</Text>
                       </View>
                       <View style={styles.modalStatCard}>
                         <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.adr}
+                          {selectedPlayer.adr}
                         </Text>
                         <Text style={styles.modalStatLabel}>ADR</Text>
                       </View>
                     </View>
                   </View>
 
+                  {/* Skills */}
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>SKILLS</Text>
+
+                    {loadingSkills ? (
+                      <View style={styles.skillsLoading}>
+                        <ActivityIndicator size="small" color="#10B981" />
+                        <Text style={styles.skillsLoadingText}>
+                          Carregando skills...
+                        </Text>
+                      </View>
+                    ) : selectedPlayer.skills &&
+                      selectedPlayer.skills.length > 0 ? (
+                      <View style={styles.skillsContainer}>
+                        {sortedSkills(selectedPlayer.skills).map((skill) => (
+                          <View key={skill.skill_name} style={styles.skillItem}>
+                            <View style={styles.skillHeader}>
+                              <Text style={styles.skillName}>
+                                {skill.skill_name}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.skillValue,
+                                  { color: getSkillColor(skill.value) },
+                                ]}
+                              >
+                                {skill.value}
+                              </Text>
+                            </View>
+                            <View style={styles.skillBar}>
+                              <View
+                                style={[
+                                  styles.skillBarFill,
+                                  {
+                                    width: `${skill.value}%`,
+                                    backgroundColor: getSkillColor(skill.value),
+                                  },
+                                ]}
+                              />
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={styles.skillsEmpty}>
+                        Nenhuma skill registrada.
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Condição */}
                   <View style={styles.modalSection}>
                     <Text style={styles.modalSectionTitle}>CONDIÇÃO</Text>
                     <View style={styles.modalMetrics}>
-                      <View style={styles.modalMetricItem}>
-                        <Text style={styles.modalMetricLabel}>Energia</Text>
-                        <View style={styles.modalMetricBar}>
-                          <View
-                            style={[
-                              styles.modalMetricFill,
-                              { width: `${selectedPlayer.energy}%` },
-                            ]}
-                          />
+                      {(
+                        [
+                          { label: "Energia", value: selectedPlayer.energy },
+                          { label: "Moral", value: selectedPlayer.morale },
+                          { label: "Forma", value: selectedPlayer.form },
+                        ] as const
+                      ).map(({ label, value }) => (
+                        <View key={label} style={styles.modalMetricItem}>
+                          <Text style={styles.modalMetricLabel}>{label}</Text>
+                          <View style={styles.modalMetricBar}>
+                            <View
+                              style={[
+                                styles.modalMetricFill,
+                                { width: `${value}%` },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.modalMetricValue}>{value}%</Text>
                         </View>
-                        <Text style={styles.modalMetricValue}>
-                          {selectedPlayer.energy}%
-                        </Text>
-                      </View>
-                      <View style={styles.modalMetricItem}>
-                        <Text style={styles.modalMetricLabel}>Moral</Text>
-                        <View style={styles.modalMetricBar}>
-                          <View
-                            style={[
-                              styles.modalMetricFill,
-                              { width: `${selectedPlayer.morale}%` },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.modalMetricValue}>
-                          {selectedPlayer.morale}%
-                        </Text>
-                      </View>
-                      <View style={styles.modalMetricItem}>
-                        <Text style={styles.modalMetricLabel}>Forma</Text>
-                        <View style={styles.modalMetricBar}>
-                          <View
-                            style={[
-                              styles.modalMetricFill,
-                              { width: `${selectedPlayer.form}%` },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.modalMetricValue}>
-                          {selectedPlayer.form}%
-                        </Text>
-                      </View>
+                      ))}
                     </View>
                   </View>
 
+                  {/* Ações */}
                   <View style={styles.modalActions}>
                     <TouchableOpacity style={styles.modalActionButton}>
                       <Text style={styles.modalActionButtonText}>
@@ -646,6 +702,17 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: "#10B981",
     borderRadius: 2,
+  },
+
+  // Loading
+  loadingContainer: {
+    alignItems: "center",
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    color: "#6B7280",
+    fontSize: 14,
   },
 
   // Player Card
@@ -862,6 +929,62 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
   },
+
+  // Skills
+  skillsContainer: {
+    backgroundColor: "#0A0A0A",
+    padding: 16,
+    borderRadius: 8,
+    gap: 16,
+  },
+  skillItem: {
+    gap: 6,
+  },
+  skillHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  skillName: {
+    fontSize: 13,
+    color: "#D1D5DB",
+    fontWeight: "500",
+  },
+  skillValue: {
+    fontSize: 14,
+    fontWeight: "bold",
+  },
+  skillBar: {
+    height: 8,
+    backgroundColor: "#1F1F1F",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  skillBarFill: {
+    height: "100%",
+    borderRadius: 4,
+  },
+  skillsLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 16,
+    backgroundColor: "#0A0A0A",
+    borderRadius: 8,
+  },
+  skillsLoadingText: {
+    color: "#6B7280",
+    fontSize: 13,
+  },
+  skillsEmpty: {
+    color: "#6B7280",
+    fontSize: 13,
+    padding: 16,
+    backgroundColor: "#0A0A0A",
+    borderRadius: 8,
+  },
+
+  // Metrics
   modalMetrics: {
     gap: 16,
   },
@@ -892,6 +1015,8 @@ const styles = StyleSheet.create({
     color: "#10B981",
     textAlign: "right",
   },
+
+  // Modal Actions
   modalActions: {
     gap: 12,
     marginBottom: 20,
