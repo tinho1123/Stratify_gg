@@ -1,0 +1,21 @@
+<!-- @dsCard group="Type" viewport="700x160" name="Stat numerals — Geist Mono" subtitle="Tabular figures for ratings, K/D, ADR, prices and countdowns" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:20px; background:var(--surface-app); display:flex; gap:14px; align-items:stretch; }
+  .tile { flex:1; background:var(--surface-raised); border:1px solid var(--border-subtle); border-radius:var(--radius-lg); padding:12px; text-align:center; }
+  .v { font:900 24px var(--font-mono); font-variant-numeric:tabular-nums; }
+  .l { font:600 9px var(--font-sans); letter-spacing:0.08em; color:var(--text-muted); margin-top:4px; text-transform:uppercase; }
+</style>
+</head>
+<body>
+  <div class="tile"><div class="v" style="color:var(--emerald-500)">94</div><div class="l">Rating</div></div>
+  <div class="tile"><div class="v" style="color:var(--text-primary)">1.42</div><div class="l">K / D</div></div>
+  <div class="tile"><div class="v" style="color:var(--warning)">86.4</div><div class="l">ADR</div></div>
+  <div class="tile"><div class="v" style="color:var(--text-primary)">$2.4M</div><div class="l">Lance</div></div>
+  <div class="tile"><div class="v" style="color:var(--danger)">02:14</div><div class="l">Tempo</div></div>
+</body>
+</html>

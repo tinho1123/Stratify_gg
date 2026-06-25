@@ -1,0 +1,13 @@
+/* ===========================================================================
+   Stratify — Webfonts
+   The native app renders in the platform system font (SF Pro / Roboto).
+   For web/HTML artifacts we substitute the nearest expressive matches:
+     · Archivo    — grotesque with a sporty, condensable heavy uppercase that
+                    mirrors the app's letter-spaced 900-weight headers.
+     · Geist Mono — tabular numerals for stat blocks (ratings, K/D, ADR, $).
+   Loaded from Google Fonts CDN (no binaries are vendored in this project).
+   ⚠ SUBSTITUTION — if you have brand-licensed fonts, drop them in /assets/fonts
+   and replace the @import below with local @font-face rules.
+   =========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap');

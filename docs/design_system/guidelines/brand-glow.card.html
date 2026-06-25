@@ -1,0 +1,33 @@
+<!-- @dsCard group="Brand" viewport="700x220" name="Glow & gradient" subtitle="Radial wash behind heroes; emerald-tinted gradient cards; glow rings" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:20px; background:var(--surface-app); display:flex; gap:16px; }
+  .demo { flex:1; border-radius:var(--radius-3xl); border:1px solid var(--border-subtle); padding:18px; position:relative; overflow:hidden; min-height:150px; display:flex; flex-direction:column; justify-content:flex-end; }
+  .lab { font:800 10px var(--font-sans); letter-spacing:0.12em; text-transform:uppercase; color:var(--text-muted); margin-bottom:4px; }
+  .val { font:500 10px var(--font-mono); color:var(--text-faint); }
+  .badge { position:absolute; top:14px; left:14px; font:800 10px var(--font-sans); letter-spacing:0.1em; color:var(--emerald-500); }
+</style>
+</head>
+<body>
+  <div class="demo" style="background:var(--surface-deep);">
+    <div style="position:absolute; inset:0; background:var(--bg-glow-emerald);"></div>
+    <div class="badge">RADIAL GLOW</div>
+    <div class="lab" style="position:relative">bg-glow-emerald</div>
+    <div class="val" style="position:relative">behind auth & hero headers</div>
+  </div>
+  <div class="demo" style="background:var(--gradient-hero); border-color:#1A3D2A;">
+    <div class="badge">HERO CARD</div>
+    <div class="lab">gradient-hero</div>
+    <div class="val">#0D1F16 → #111</div>
+  </div>
+  <div class="demo" style="background:var(--surface-deep); box-shadow:var(--glow-emerald), var(--glow-emerald-soft);">
+    <div class="badge">GLOW RING</div>
+    <div class="lab">glow-emerald</div>
+    <div class="val">1px ring + soft bloom</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,48 @@
+/* ===========================================================================
+   Stratify — Radii, borders, shadows, glow & motion tokens
+   Corners are moderate (6–16px); pills are fully round. Depth comes mostly
+   from 1px borders over dark surfaces, accented by colored "glow" rings and
+   soft radial background glows rather than heavy drop shadows.
+   =========================================================================== */
+
+:root {
+  /* ---- Radii ---------------------------------------------------------- */
+  --radius-xs: 4px;    /* tags, micro badges */
+  --radius-sm: 6px;    /* rating badges, small chips */
+  --radius-md: 8px;    /* buttons, inputs */
+  --radius-lg: 10px;
+  --radius-xl: 12px;   /* list cards */
+  --radius-2xl: 14px;  /* primary cards */
+  --radius-3xl: 16px;  /* hero, modals */
+  --radius-sheet: 20px;/* bottom-sheet top corners */
+  --radius-pill: 999px;
+
+  /* ---- Border widths -------------------------------------------------- */
+  --border-1: 1px;
+  --border-15: 1.5px;  /* input outlines */
+  --border-2: 2px;     /* selected avatars */
+
+  /* ---- Shadows (used sparingly) --------------------------------------- */
+  --shadow-sheet: 0 -8px 40px rgba(0,0,0,0.6);
+  --shadow-modal: 0 24px 60px rgba(0,0,0,0.7);
+
+  /* ---- Glow system (the signature depth cue) -------------------------- */
+  --glow-emerald: 0 0 0 1px rgba(16,185,129,0.30);
+  --glow-emerald-soft: 0 0 24px rgba(16,185,129,0.18);
+  --glow-danger: 0 0 0 1px rgba(239,68,68,0.30);
+  /* radial wash placed behind hero/auth headers */
+  --bg-glow-emerald: radial-gradient(circle at 50% 0%,
+                       rgba(16,185,129,0.10) 0%, transparent 60%);
+
+  /* gradient fills for hero cards (emerald-tinted black) */
+  --gradient-hero: linear-gradient(160deg, #0D1F16 0%, #111111 100%); /* @kind color */
+  --gradient-success: linear-gradient(160deg, #0D1F16 0%, #0D0D0D 100%); /* @kind color */
+
+  /* ---- Motion --------------------------------------------------------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1); /* @kind other */
+  --dur-fast: 120ms;  /* @kind other */
+  --dur-base: 200ms;  /* @kind other */
+  --dur-slow: 320ms;  /* @kind other */
+  --press-opacity: 0.78;   /* @kind other */ /* TouchableOpacity activeOpacity feel */
+  --press-scale: 0.97;  /* @kind other */
+}

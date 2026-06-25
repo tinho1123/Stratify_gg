@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Emerald — product accent" subtitle="The working primary: buttons, focus, brand dot, success" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:18px; background:var(--surface-app); }
+  .row { display:grid; grid-template-columns:repeat(6,1fr); gap:10px; }
+  .sw { border-radius:var(--radius-lg); height:64px; border:1px solid var(--border-subtle); }
+  .cap { margin-top:8px; font:var(--weight-bold) 11px var(--font-sans); color:var(--text-secondary); }
+  .hex { font:var(--weight-medium) 10px var(--font-mono); color:var(--text-faint); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div><div class="sw" style="background:var(--emerald-400)"></div><div class="cap">400</div><div class="hex">#34D399</div></div>
+    <div><div class="sw" style="background:var(--emerald-500)"></div><div class="cap">500 · primary</div><div class="hex">#10B981</div></div>
+    <div><div class="sw" style="background:var(--emerald-600)"></div><div class="cap">600</div><div class="hex">#059669</div></div>
+    <div><div class="sw" style="background:var(--emerald-tint-30)"></div><div class="cap">tint 30</div><div class="hex">rgba .30</div></div>
+    <div><div class="sw" style="background:var(--emerald-tint-12)"></div><div class="cap">tint 12</div><div class="hex">rgba .12</div></div>
+    <div><div class="sw" style="background:var(--emerald-tint-08)"></div><div class="cap">tint 08</div><div class="hex">rgba .08</div></div>
+  </div>
+</body>
+</html>

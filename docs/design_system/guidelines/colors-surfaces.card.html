@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Surfaces" subtitle="Near-black surface ramp, darkest app → raised controls" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:18px; background:var(--surface-app); }
+  .row { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .sw { border-radius:var(--radius-lg); border:1px solid var(--border-strong); height:64px; }
+  .cap { margin-top:8px; font:var(--weight-bold) 11px var(--font-sans); color:var(--text-secondary); }
+  .hex { font:var(--weight-medium) 10px var(--font-mono); color:var(--text-faint); letter-spacing:0.02em; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div><div class="sw" style="background:var(--surface-app)"></div><div class="cap">App</div><div class="hex">#080808</div></div>
+    <div><div class="sw" style="background:var(--surface-deep)"></div><div class="cap">Deep / card</div><div class="hex">#0D0D0D</div></div>
+    <div><div class="sw" style="background:var(--surface-raised)"></div><div class="cap">Raised</div><div class="hex">#111111</div></div>
+    <div><div class="sw" style="background:var(--surface-control)"></div><div class="cap">Control</div><div class="hex">#161616</div></div>
+    <div><div class="sw" style="background:var(--surface-hover)"></div><div class="cap">Hover</div><div class="hex">#1A1A1A</div></div>
+  </div>
+</body>
+</html>
