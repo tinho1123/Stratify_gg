@@ -1,1454 +1,956 @@
-import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import { supabase } from "@/database/supabase";
+import { router } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-    Dimensions,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-const { width } = Dimensions.get("window");
+// ── Types ────────────────────────────────────────────────────────────────────
 
-interface Player {
-  id: string;
+interface PlayerSkill {
   name: string;
-  role: string;
-  age: number;
-  rating: number;
-  price: number;
-  salary: number;
-  nationality: string;
-  team: string;
-  potential: number;
-  stats: {
-    kills: number;
-    deaths: number;
-    assists: number;
-    adr: number;
-    headshot: number;
-  };
-  personality: string[];
+  value: number;
 }
 
-type FilterRole = "ALL" | "IGL" | "AWPer" | "Entry" | "Support" | "Flex";
+interface AuctionItem {
+  id: string;
+  player_id: string;
+  seller_team_id: string;
+  seller_team_name: string;
+  current_bidder_team_id: string | null;
+  current_bidder_name: string | null;
+  start_price: number;
+  current_bid: number;
+  ends_at: string;
+  status: "active" | "ended" | "cancelled";
+  player_name: string;
+  player_role: string;
+  player_age: number;
+  player_rating: number;
+  player_kills: number;
+  player_deaths: number;
+  player_assists: number;
+  player_adr: number;
+  player_skills: PlayerSkill[];
+  avg_skill: number;
+}
+
+type SortKey = "ends_at" | "current_bid" | "rating" | "avg_skill";
+type BidState = "idle" | "loading" | "success" | "error";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const ROLE_COLOR: Record<string, string> = {
+  IGL: "#6366F1",
+  AWPer: "#EC4899",
+  Entry: "#EF4444",
+  Support: "#10B981",
+  Flex: "#F59E0B",
+};
+
+function getRatingColor(r: number) {
+  if (r >= 90) return "#10B981";
+  if (r >= 80) return "#F59E0B";
+  return "#EF4444";
+}
+
+function formatPrice(v: number) {
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v}`;
+}
+
+function formatCountdown(endsAt: string): { text: string; urgent: boolean } {
+  const diff = new Date(endsAt).getTime() - Date.now();
+  if (diff <= 0) return { text: "ENCERRADO", urgent: true };
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1_000);
+  if (h > 0) return { text: `${h}h ${m}m`, urgent: h < 2 };
+  if (m > 0) return { text: `${m}m ${s}s`, urgent: true };
+  return { text: `${s}s`, urgent: true };
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MarketScreen() {
-  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [showPlayerModal, setShowPlayerModal] = useState(false);
-  const [showNegotiateModal, setShowNegotiateModal] = useState(false);
-  const [offerAmount, setOfferAmount] = useState("");
-  const [budget, setBudget] = useState(125000);
-  const [filterRole, setFilterRole] = useState<FilterRole>("ALL");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [myTeamId, setMyTeamId] = useState<string | null>(null);
+  const [budget, setBudget] = useState<number | null>(null);
+  const [auctions, setAuctions] = useState<AuctionItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const players: Player[] = [
-    {
-      id: "1",
-      name: "ZywOo",
-      role: "AWPer",
-      age: 23,
-      rating: 96,
-      price: 250000,
-      salary: 25000,
-      nationality: "🇫🇷",
-      team: "Vitality",
-      potential: 98,
-      stats: {
-        kills: 2450,
-        deaths: 1820,
-        assists: 680,
-        adr: 95.2,
-        headshot: 62,
-      },
-      personality: ["Focado", "Clutch Master"],
-    },
-    {
-      id: "2",
-      name: "s1mple",
-      role: "AWPer",
-      age: 26,
-      rating: 95,
-      price: 280000,
-      salary: 28000,
-      nationality: "🇺🇦",
-      team: "NAVI",
-      potential: 95,
-      stats: {
-        kills: 2680,
-        deaths: 1920,
-        assists: 720,
-        adr: 93.8,
-        headshot: 58,
-      },
-      personality: ["Lenda", "Competitivo"],
-    },
-    {
-      id: "3",
-      name: "NiKo",
-      role: "Flex",
-      age: 27,
-      rating: 93,
-      price: 220000,
-      salary: 22000,
-      nationality: "🇧🇦",
-      team: "G2",
-      potential: 92,
-      stats: {
-        kills: 2520,
-        deaths: 1890,
-        assists: 840,
-        adr: 89.5,
-        headshot: 64,
-      },
-      personality: ["Versátil", "Líder"],
-    },
-    {
-      id: "4",
-      name: "frozen",
-      role: "Entry",
-      age: 22,
-      rating: 88,
-      price: 150000,
-      salary: 16000,
-      nationality: "🇸🇰",
-      team: "MOUZ",
-      potential: 94,
-      stats: {
-        kills: 2180,
-        deaths: 1980,
-        assists: 620,
-        adr: 84.3,
-        headshot: 59,
-      },
-      personality: ["Jovem Promessa", "Agressivo"],
-    },
-    {
-      id: "5",
-      name: "ropz",
-      role: "Support",
-      age: 24,
-      rating: 90,
-      price: 180000,
-      salary: 18000,
-      nationality: "🇪🇪",
-      team: "FaZe",
-      potential: 91,
-      stats: {
-        kills: 2280,
-        deaths: 1850,
-        assists: 920,
-        adr: 82.7,
-        headshot: 56,
-      },
-      personality: ["Inteligente", "Consistente"],
-    },
-    {
-      id: "6",
-      name: "karrigan",
-      role: "IGL",
-      age: 34,
-      rating: 85,
-      price: 120000,
-      salary: 15000,
-      nationality: "🇩🇰",
-      team: "FaZe",
-      potential: 84,
-      stats: {
-        kills: 1880,
-        deaths: 1920,
-        assists: 1020,
-        adr: 75.4,
-        headshot: 52,
-      },
-      personality: ["Veterano", "Tático", "Líder Nato"],
-    },
-    {
-      id: "7",
-      name: "donk",
-      role: "Entry",
-      age: 18,
-      rating: 89,
-      price: 160000,
-      salary: 14000,
-      nationality: "🇷🇺",
-      team: "Spirit",
-      potential: 97,
-      stats: {
-        kills: 2320,
-        deaths: 2020,
-        assists: 580,
-        adr: 88.9,
-        headshot: 67,
-      },
-      personality: ["Prodígio", "Fenômeno"],
-    },
-    {
-      id: "8",
-      name: "YEKINDAR",
-      role: "Flex",
-      age: 25,
-      rating: 87,
-      price: 140000,
-      salary: 16000,
-      nationality: "🇱🇻",
-      team: "Liquid",
-      potential: 89,
-      stats: {
-        kills: 2120,
-        deaths: 1950,
-        assists: 760,
-        adr: 81.2,
-        headshot: 54,
-      },
-      personality: ["Energético", "Multi-role"],
-    },
-  ];
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("ends_at");
 
-  const roles: FilterRole[] = [
-    "ALL",
-    "IGL",
-    "AWPer",
-    "Entry",
-    "Support",
-    "Flex",
-  ];
+  const [detail, setDetail] = useState<AuctionItem | null>(null);
+  const [bidValue, setBidValue] = useState("");
+  const [bidState, setBidState] = useState<BidState>("idle");
+  const [bidError, setBidError] = useState("");
 
-  const filteredPlayers = players.filter((player) => {
-    const matchesRole = filterRole === "ALL" || player.role === filterRole;
-    const matchesSearch =
-      player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      player.team.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesRole && matchesSearch;
-  });
+  // Tick every second to refresh countdowns
+  const [, setTick] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handlePlayerPress = (player: Player) => {
-    setSelectedPlayer(player);
-    setShowPlayerModal(true);
-  };
+  // ── Load team ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    supabase
+      .from("teams")
+      .select("id, budget")
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setMyTeamId(data.id);
+          setBudget(data.budget);
+        }
+      });
+  }, []);
 
-  const handleNegotiate = () => {
-    if (!selectedPlayer) return;
-    setOfferAmount(selectedPlayer.price.toString());
-    setShowPlayerModal(false);
-    setShowNegotiateModal(true);
-  };
+  // ── Fetch auctions ───────────────────────────────────────────────────────
+  const fetchAuctions = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("auctions")
+      .select(`
+        id,
+        player_id,
+        seller_team_id,
+        current_bidder_team_id,
+        start_price,
+        current_bid,
+        ends_at,
+        status,
+        player:players(
+          id, name, role, age, rating, kills, deaths, assists, adr,
+          player_skills(value, skill:skills(name))
+        ),
+        seller_team:seller_team_id(id, name),
+        current_bidder:current_bidder_team_id(id, name)
+      `)
+      .eq("status", "active")
+      .order("ends_at", { ascending: true });
 
-  const handleSendOffer = () => {
-    const offer = parseInt(offerAmount);
-    if (!selectedPlayer || !offer) return;
-
-    if (offer > budget) {
-      alert("Você não tem orçamento suficiente! 💸");
+    if (error || !data) {
+      setLoading(false);
       return;
     }
 
-    const difference =
-      ((offer - selectedPlayer.price) / selectedPlayer.price) * 100;
+    const items: AuctionItem[] = (data as any[]).map((row) => {
+      const p = row.player;
+      const skills: PlayerSkill[] = (p?.player_skills ?? []).map((ps: any) => ({
+        name: ps.skill?.name ?? "",
+        value: ps.value,
+      }));
+      const avg_skill =
+        skills.length > 0
+          ? Math.round(skills.reduce((s: number, sk: PlayerSkill) => s + sk.value, 0) / skills.length)
+          : 0;
 
-    if (difference < -20) {
-      alert("Oferta muito baixa! O time recusou. ❌");
-    } else if (difference < 0) {
-      alert("O time está considerando sua oferta... 🤔");
-    } else {
-      alert(`Oferta aceita! ${selectedPlayer.name} agora é seu! 🎉`);
-      setBudget(budget - offer);
-      setShowNegotiateModal(false);
-      setSelectedPlayer(null);
+      return {
+        id: row.id,
+        player_id: row.player_id,
+        seller_team_id: row.seller_team_id,
+        seller_team_name: row.seller_team?.name ?? "—",
+        current_bidder_team_id: row.current_bidder_team_id ?? null,
+        current_bidder_name: row.current_bidder?.name ?? null,
+        start_price: row.start_price,
+        current_bid: row.current_bid,
+        ends_at: row.ends_at,
+        status: row.status,
+        player_name: p?.name ?? "—",
+        player_role: p?.role ?? "—",
+        player_age: p?.age ?? 0,
+        player_rating: p?.rating ?? 0,
+        player_kills: p?.kills ?? 0,
+        player_deaths: p?.deaths ?? 0,
+        player_assists: p?.assists ?? 0,
+        player_adr: p?.adr ?? 0,
+        player_skills: skills,
+        avg_skill,
+      };
+    });
+
+    setAuctions(items);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchAuctions();
+  }, [fetchAuctions]);
+
+  // ── Realtime subscription ────────────────────────────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel("auctions-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "auctions" },
+        () => fetchAuctions()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchAuctions]);
+
+  // ── Countdown tick ────────────────────────────────────────────────────────
+  useEffect(() => {
+    timerRef.current = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  // ── Filtered / sorted ─────────────────────────────────────────────────────
+  const allRoles = useMemo(
+    () => Array.from(new Set(auctions.map((a) => a.player_role))),
+    [auctions]
+  );
+
+  const filtered = useMemo(() => {
+    let list = [...auctions];
+    if (roleFilter) list = list.filter((a) => a.player_role === roleFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.player_name.toLowerCase().includes(q) ||
+          a.seller_team_name.toLowerCase().includes(q)
+      );
     }
+    list.sort((a, b) => {
+      if (sortKey === "current_bid")
+        return (b.current_bid || b.start_price) - (a.current_bid || a.start_price);
+      if (sortKey === "rating") return b.player_rating - a.player_rating;
+      if (sortKey === "avg_skill") return b.avg_skill - a.avg_skill;
+      return new Date(a.ends_at).getTime() - new Date(b.ends_at).getTime();
+    });
+    return list;
+  }, [auctions, search, roleFilter, sortKey]);
+
+  // ── Actions ───────────────────────────────────────────────────────────────
+  const openDetail = (a: AuctionItem) => {
+    const minNext = Math.max(a.current_bid, a.start_price) + 500;
+    setDetail(a);
+    setBidValue(String(minNext));
+    setBidState("idle");
+    setBidError("");
   };
 
-  const getRatingColor = (rating: number) => {
-    if (rating >= 90) return "#10B981";
-    if (rating >= 80) return "#3B82F6";
-    if (rating >= 70) return "#F59E0B";
-    return "#6B7280";
+  const closeDetail = () => {
+    setDetail(null);
+    setBidState("idle");
+    setBidError("");
   };
 
-  const getPotentialColor = (potential: number) => {
-    if (potential >= 95) return "#EC4899";
-    if (potential >= 90) return "#8B5CF6";
-    return "#10B981";
+  const submitBid = async () => {
+    if (!detail || !myTeamId) return;
+    const amount = parseInt(bidValue.replace(/\D/g, ""), 10);
+    const minBid = Math.max(detail.current_bid, detail.start_price) + 1;
+
+    if (!amount || amount < minBid) {
+      setBidError(`Lance mínimo: ${formatPrice(minBid)}`);
+      return;
+    }
+    if (budget !== null && amount > budget) {
+      setBidError("Saldo insuficiente para este lance");
+      return;
+    }
+    if (detail.seller_team_id === myTeamId) {
+      setBidError("Você não pode dar lance no próprio jogador");
+      return;
+    }
+
+    setBidState("loading");
+    setBidError("");
+
+    const { error } = await supabase
+      .from("auctions")
+      .update({ current_bid: amount, current_bidder_team_id: myTeamId })
+      .eq("id", detail.id)
+      .eq("status", "active");
+
+    if (error) {
+      setBidState("error");
+      setBidError("Erro ao registrar lance. Tente novamente.");
+      return;
+    }
+
+    setBidState("success");
+    setDetail((prev) =>
+      prev
+        ? { ...prev, current_bid: amount, current_bidder_team_id: myTeamId, current_bidder_name: "Você" }
+        : prev
+    );
+    fetchAuctions();
   };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  const SORTS: { key: SortKey; label: string }[] = [
+    { key: "ends_at", label: "Tempo" },
+    { key: "current_bid", label: "Lance" },
+    { key: "rating", label: "RTG" },
+    { key: "avg_skill", label: "Skills" },
+  ];
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient colors={["#10B981", "#059669"]} style={styles.header}>
-        <Text style={styles.headerTitle}>MERCADO DE TRANSFERÊNCIAS</Text>
-        <Text style={styles.headerSubtitle}>Encontre a próxima estrela</Text>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
 
-        <View style={styles.budgetCard}>
-          <Text style={styles.budgetIcon}>💰</Text>
-          <View>
-            <Text style={styles.budgetValue}>${budget.toLocaleString()}</Text>
-            <Text style={styles.budgetLabel}>Orçamento Disponível</Text>
-          </View>
+      {/* ── HEADER ─────────────────────────────────────── */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <View style={styles.headerDot} />
+          <Text style={styles.headerTitle}>MERCADO</Text>
         </View>
-      </LinearGradient>
-
-      <View style={styles.content}>
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Text style={styles.searchIcon}>🔍</Text>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar jogador ou time..."
-            placeholderTextColor="#6B7280"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
+        <View style={styles.budgetPill}>
+          <Text style={styles.budgetLabel}>ORÇAMENTO</Text>
+          <Text style={styles.budgetValue}>
+            {budget !== null ? formatPrice(budget) : "—"}
+          </Text>
         </View>
+      </View>
 
-        {/* Role Filters */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filtersContainer}
-          contentContainerStyle={styles.filtersContent}
+      {/* ── SEARCH ─────────────────────────────────────── */}
+      <View style={styles.searchWrap}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar jogador ou time..."
+          placeholderTextColor="#4B5563"
+          value={search}
+          onChangeText={setSearch}
+          returnKeyType="search"
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Text style={styles.searchClear}>✕</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── ROLE FILTERS ───────────────────────────────── */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroll}
+        contentContainerStyle={styles.filtersContent}
+      >
+        <TouchableOpacity
+          style={[styles.filterPill, !roleFilter && styles.filterPillActive]}
+          onPress={() => setRoleFilter(null)}
         >
-          {roles.map((role) => (
+          <Text style={[styles.filterPillText, !roleFilter && styles.filterPillTextActive]}>
+            TODOS
+          </Text>
+        </TouchableOpacity>
+        {allRoles.map((r) => {
+          const rc = ROLE_COLOR[r] ?? "#6366F1";
+          return (
             <TouchableOpacity
-              key={role}
+              key={r}
               style={[
-                styles.filterChip,
-                filterRole === role && styles.filterChipActive,
+                styles.filterPill,
+                roleFilter === r && { backgroundColor: rc + "22", borderColor: rc },
               ]}
-              onPress={() => setFilterRole(role)}
+              onPress={() => setRoleFilter(roleFilter === r ? null : r)}
             >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  filterRole === role && styles.filterChipTextActive,
-                ]}
-              >
-                {role}
+              <Text style={[styles.filterPillText, roleFilter === r && { color: rc }]}>
+                {r}
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+          );
+        })}
+      </ScrollView>
 
-        {/* Players List */}
-        <ScrollView
-          style={styles.playersList}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.playersGrid}>
-            {filteredPlayers.map((player) => (
-              <TouchableOpacity
-                key={player.id}
-                style={styles.playerCard}
-                onPress={() => handlePlayerPress(player)}
-                activeOpacity={0.7}
-              >
-                {/* Player Header */}
-                <View style={styles.playerCardHeader}>
-                  <View style={styles.playerBasicInfo}>
-                    <Text style={styles.playerNationality}>
-                      {player.nationality}
-                    </Text>
-                    <View>
-                      <Text style={styles.playerName}>{player.name}</Text>
-                      <Text style={styles.playerTeam}>{player.team}</Text>
+      {/* ── SORT ROW ───────────────────────────────────── */}
+      <View style={styles.sortRow}>
+        <Text style={styles.sortLabel}>Ordenar:</Text>
+        {SORTS.map((s) => (
+          <TouchableOpacity
+            key={s.key}
+            style={[styles.sortBtn, sortKey === s.key && styles.sortBtnActive]}
+            onPress={() => setSortKey(s.key)}
+          >
+            <Text style={[styles.sortBtnText, sortKey === s.key && styles.sortBtnTextActive]}>
+              {s.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+        <Text style={styles.sortCount}>{filtered.length} leilões</Text>
+      </View>
+
+      {/* ── LIST ───────────────────────────────────────── */}
+      {loading ? (
+        <View style={styles.emptyWrap}>
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Text style={styles.emptyText}>Carregando leilões...</Text>
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyEmoji}>🔨</Text>
+          <Text style={styles.emptyText}>Nenhum leilão ativo</Text>
+          <Text style={styles.emptySub}>
+            Coloque jogadores à venda pela tela de Gerenciamento
+          </Text>
+        </View>
+      ) : (
+        <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
+          <View style={styles.listInner}>
+            {filtered.map((a, i) => {
+              const cd = formatCountdown(a.ends_at);
+              const isMySeller = a.seller_team_id === myTeamId;
+              const isMyBid = a.current_bidder_team_id === myTeamId;
+              const rc = ROLE_COLOR[a.player_role] ?? "#6366F1";
+              const effectiveBid = a.current_bid > 0 ? a.current_bid : a.start_price;
+
+              return (
+                <TouchableOpacity
+                  key={a.id}
+                  activeOpacity={0.75}
+                  onPress={() => openDetail(a)}
+                  style={[styles.auctionCard, isMyBid && styles.auctionCardMyBid]}
+                >
+                  {/* Rank */}
+                  <Text style={styles.cardRank}>#{i + 1}</Text>
+
+                  {/* Avatar */}
+                  <View style={[styles.cardAvatar, { borderColor: rc + "55" }]}>
+                    <Text style={styles.cardAvatarText}>{a.player_name[0]}</Text>
+                  </View>
+
+                  {/* Info */}
+                  <View style={styles.cardInfo}>
+                    <View style={styles.cardNameRow}>
+                      <Text style={styles.cardName}>{a.player_name}</Text>
+                      {isMySeller && (
+                        <View style={styles.myBadge}>
+                          <Text style={styles.myBadgeText}>MEU</Text>
+                        </View>
+                      )}
+                      {isMyBid && (
+                        <View style={[styles.myBadge, styles.myBadgeWinning]}>
+                          <Text style={[styles.myBadgeText, { color: "#10B981" }]}>GANHANDO</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.cardMetaRow}>
+                      <View style={[styles.roleTag, { backgroundColor: rc + "22" }]}>
+                        <Text style={[styles.roleTagText, { color: rc }]}>{a.player_role}</Text>
+                      </View>
+                      <Text style={styles.cardTeam}>{a.seller_team_name}</Text>
+                      <Text style={styles.cardAge}>{a.player_age}a</Text>
+                    </View>
+                    <View style={styles.cardBidRow}>
+                      <Text style={styles.cardBidLabel}>
+                        {a.current_bid > 0 ? "Lance:" : "Início:"}
+                      </Text>
+                      <Text style={[styles.cardBidValue, isMyBid && { color: "#10B981" }]}>
+                        {formatPrice(effectiveBid)}
+                      </Text>
                     </View>
                   </View>
-                  <View
-                    style={[
-                      styles.ratingBadge,
-                      { backgroundColor: getRatingColor(player.rating) },
-                    ]}
-                  >
-                    <Text style={styles.ratingText}>{player.rating}</Text>
+
+                  {/* Right */}
+                  <View style={styles.cardRight}>
+                    <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(a.player_rating) + "22" }]}>
+                      <Text style={[styles.ratingValue, { color: getRatingColor(a.player_rating) }]}>
+                        {a.player_rating}
+                      </Text>
+                    </View>
+                    <Text style={[styles.countdown, cd.urgent && styles.countdownUrgent]}>
+                      {cd.text}
+                    </Text>
+                    <Text style={styles.avgSkill}>avg {a.avg_skill}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      )}
+
+      {/* ── DETAIL BOTTOM SHEET ─────────────────────────── */}
+      <Modal
+        visible={!!detail}
+        transparent
+        animationType="slide"
+        onRequestClose={closeDetail}
+      >
+        <Pressable style={styles.overlay} onPress={closeDetail}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+
+            {detail && (
+              <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+
+                {/* ── Player header */}
+                <View style={styles.detailHeader}>
+                  <View style={[
+                    styles.detailAvatar,
+                    { borderColor: ROLE_COLOR[detail.player_role] ?? "#6366F1" },
+                  ]}>
+                    <Text style={styles.detailAvatarText}>{detail.player_name[0]}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.detailName}>{detail.player_name}</Text>
+                    <View style={styles.detailMetaRow}>
+                      <View style={[
+                        styles.roleTag,
+                        { backgroundColor: (ROLE_COLOR[detail.player_role] ?? "#6366F1") + "22" },
+                      ]}>
+                        <Text style={[
+                          styles.roleTagText,
+                          { color: ROLE_COLOR[detail.player_role] ?? "#6366F1" },
+                        ]}>
+                          {detail.player_role}
+                        </Text>
+                      </View>
+                      <Text style={styles.detailAge}>{detail.player_age} anos</Text>
+                    </View>
+                    <View style={styles.sellerRow}>
+                      <Text style={styles.sellerLabel}>Vendido por</Text>
+                      <Text style={styles.sellerName}>{detail.seller_team_name}</Text>
+                    </View>
                   </View>
                 </View>
 
-                {/* Player Info */}
-                <View style={styles.playerInfo}>
-                  <View style={styles.playerInfoItem}>
-                    <Text style={styles.playerInfoLabel}>Função</Text>
-                    <Text style={styles.playerInfoValue}>{player.role}</Text>
-                  </View>
-                  <View style={styles.playerInfoItem}>
-                    <Text style={styles.playerInfoLabel}>Idade</Text>
-                    <Text style={styles.playerInfoValue}>{player.age}</Text>
-                  </View>
-                  <View style={styles.playerInfoItem}>
-                    <Text style={styles.playerInfoLabel}>Potencial</Text>
-                    <Text
-                      style={[
-                        styles.playerInfoValue,
-                        { color: getPotentialColor(player.potential) },
-                      ]}
-                    >
-                      {player.potential}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Player Stats Preview */}
-                <View style={styles.statsPreview}>
-                  <View style={styles.statPreviewItem}>
-                    <Text style={styles.statPreviewValue}>
-                      {(player.stats.kills / player.stats.deaths).toFixed(2)}
-                    </Text>
-                    <Text style={styles.statPreviewLabel}>K/D</Text>
-                  </View>
-                  <View style={styles.statPreviewItem}>
-                    <Text style={styles.statPreviewValue}>
-                      {player.stats.adr}
-                    </Text>
-                    <Text style={styles.statPreviewLabel}>ADR</Text>
-                  </View>
-                  <View style={styles.statPreviewItem}>
-                    <Text style={styles.statPreviewValue}>
-                      {player.stats.headshot}%
-                    </Text>
-                    <Text style={styles.statPreviewLabel}>HS%</Text>
-                  </View>
-                </View>
-
-                {/* Personality Tags */}
-                <View style={styles.personalityTags}>
-                  {player.personality.map((trait, index) => (
-                    <View key={index} style={styles.personalityTag}>
-                      <Text style={styles.personalityTagText}>{trait}</Text>
+                {/* ── Stats */}
+                <View style={styles.statsRow}>
+                  {[
+                    { v: detail.player_rating, l: "Rating", c: getRatingColor(detail.player_rating) },
+                    { v: detail.avg_skill, l: "Avg Skill", c: "#6366F1" },
+                    {
+                      v: detail.player_deaths > 0
+                        ? (detail.player_kills / detail.player_deaths).toFixed(2)
+                        : "∞",
+                      l: "K/D",
+                      c: "#10B981",
+                    },
+                    { v: Number(detail.player_adr).toFixed(0), l: "ADR", c: "#F59E0B" },
+                  ].map((stat) => (
+                    <View key={stat.l} style={styles.statCard}>
+                      <Text style={[styles.statValue, { color: stat.c }]}>{stat.v}</Text>
+                      <Text style={styles.statLabel}>{stat.l}</Text>
                     </View>
                   ))}
                 </View>
 
-                {/* Price */}
-                <View style={styles.priceContainer}>
-                  <View>
-                    <Text style={styles.priceLabel}>
-                      Valor de Transferência
-                    </Text>
-                    <Text style={styles.priceValue}>
-                      ${player.price.toLocaleString()}
-                    </Text>
-                  </View>
-                  <Text style={styles.salaryText}>
-                    💰 ${player.salary.toLocaleString()}/mês
-                  </Text>
-                </View>
-
-                <View style={styles.viewDetailsArrow}>
-                  <Text style={styles.viewDetailsText}>VER DETALHES ›</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {filteredPlayers.length === 0 && (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>🔍</Text>
-              <Text style={styles.emptyStateText}>
-                Nenhum jogador encontrado
-              </Text>
-              <Text style={styles.emptyStateSubtext}>
-                Tente ajustar os filtros
-              </Text>
-            </View>
-          )}
-
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </View>
-
-      {/* Player Details Modal */}
-      <Modal
-        visible={showPlayerModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowPlayerModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedPlayer && (
-              <>
-                <LinearGradient
-                  colors={[getRatingColor(selectedPlayer.rating), "#059669"]}
-                  style={styles.modalHeader}
-                >
-                  <Text style={styles.modalNationality}>
-                    {selectedPlayer.nationality}
-                  </Text>
-                  <Text style={styles.modalPlayerName}>
-                    {selectedPlayer.name}
-                  </Text>
-                  <Text style={styles.modalPlayerTeam}>
-                    {selectedPlayer.team}
-                  </Text>
-                  <View style={styles.modalRatings}>
-                    <View style={styles.modalRatingItem}>
-                      <Text style={styles.modalRatingValue}>
-                        {selectedPlayer.rating}
-                      </Text>
-                      <Text style={styles.modalRatingLabel}>Rating</Text>
-                    </View>
-                    <View style={styles.modalRatingItem}>
-                      <Text
-                        style={[
-                          styles.modalRatingValue,
-                          {
-                            color: getPotentialColor(selectedPlayer.potential),
-                          },
-                        ]}
-                      >
-                        {selectedPlayer.potential}
-                      </Text>
-                      <Text style={styles.modalRatingLabel}>Potencial</Text>
-                    </View>
-                  </View>
-                </LinearGradient>
-
-                <ScrollView style={styles.modalBody}>
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>INFORMAÇÕES</Text>
-                    <View style={styles.modalInfoGrid}>
-                      <View style={styles.modalInfoCard}>
-                        <Text style={styles.modalInfoCardLabel}>Idade</Text>
-                        <Text style={styles.modalInfoCardValue}>
-                          {selectedPlayer.age} anos
-                        </Text>
-                      </View>
-                      <View style={styles.modalInfoCard}>
-                        <Text style={styles.modalInfoCardLabel}>Função</Text>
-                        <Text style={styles.modalInfoCardValue}>
-                          {selectedPlayer.role}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>ESTATÍSTICAS</Text>
-                    <View style={styles.modalStatsGrid}>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.kills}
-                        </Text>
-                        <Text style={styles.modalStatLabel}>Kills</Text>
-                      </View>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.deaths}
-                        </Text>
-                        <Text style={styles.modalStatLabel}>Deaths</Text>
-                      </View>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.assists}
-                        </Text>
-                        <Text style={styles.modalStatLabel}>Assists</Text>
-                      </View>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.adr}
-                        </Text>
-                        <Text style={styles.modalStatLabel}>ADR</Text>
-                      </View>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {(
-                            selectedPlayer.stats.kills /
-                            selectedPlayer.stats.deaths
-                          ).toFixed(2)}
-                        </Text>
-                        <Text style={styles.modalStatLabel}>K/D Ratio</Text>
-                      </View>
-                      <View style={styles.modalStatCard}>
-                        <Text style={styles.modalStatValue}>
-                          {selectedPlayer.stats.headshot}%
-                        </Text>
-                        <Text style={styles.modalStatLabel}>HS%</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>PERSONALIDADE</Text>
-                    <View style={styles.modalPersonality}>
-                      {selectedPlayer.personality.map((trait, index) => (
-                        <View key={index} style={styles.modalPersonalityTag}>
-                          <Text style={styles.modalPersonalityText}>
-                            ✨ {trait}
-                          </Text>
+                {/* ── Skills */}
+                {detail.player_skills.length > 0 && (
+                  <>
+                    <Text style={styles.sectionTitle}>SKILLS</Text>
+                    <View style={styles.skillsGrid}>
+                      {detail.player_skills.map((sk) => (
+                        <View key={sk.name} style={styles.skillRow}>
+                          <Text style={styles.skillName}>{sk.name}</Text>
+                          <View style={styles.skillBarBg}>
+                            <View
+                              style={[
+                                styles.skillBarFill,
+                                {
+                                  width: `${sk.value}%` as any,
+                                  backgroundColor:
+                                    sk.value >= 80 ? "#10B981" :
+                                    sk.value >= 60 ? "#F59E0B" : "#EF4444",
+                                },
+                              ]}
+                            />
+                          </View>
+                          <Text style={styles.skillValue}>{sk.value}</Text>
                         </View>
                       ))}
                     </View>
-                  </View>
+                  </>
+                )}
 
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>CUSTO</Text>
-                    <View style={styles.modalCostCard}>
-                      <View style={styles.modalCostRow}>
-                        <Text style={styles.modalCostLabel}>
-                          Transferência:
-                        </Text>
-                        <Text style={styles.modalCostValue}>
-                          ${selectedPlayer.price.toLocaleString()}
-                        </Text>
-                      </View>
-                      <View style={styles.modalCostRow}>
-                        <Text style={styles.modalCostLabel}>
-                          Salário Mensal:
-                        </Text>
-                        <Text style={styles.modalCostValue}>
-                          ${selectedPlayer.salary.toLocaleString()}
-                        </Text>
-                      </View>
-                      <View style={styles.modalCostDivider} />
-                      <View style={styles.modalCostRow}>
-                        <Text style={styles.modalCostLabel}>
-                          Custo Anual Total:
-                        </Text>
-                        <Text
-                          style={[styles.modalCostValue, styles.modalCostTotal]}
-                        >
-                          $
-                          {(
-                            selectedPlayer.price +
-                            selectedPlayer.salary * 12
-                          ).toLocaleString()}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </ScrollView>
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={styles.modalButtonSecondary}
-                    onPress={() => setShowPlayerModal(false)}
-                  >
-                    <Text style={styles.modalButtonTextSecondary}>VOLTAR</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.modalButtonPrimary}
-                    onPress={handleNegotiate}
-                  >
-                    <Text style={styles.modalButtonTextPrimary}>
-                      FAZER OFERTA
+                {/* ── Auction info */}
+                <View style={styles.divider} />
+                <Text style={styles.sectionTitle}>LEILÃO</Text>
+                <View style={styles.auctionInfoRow}>
+                  <View style={styles.auctionInfoItem}>
+                    <Text style={styles.auctionInfoLabel}>Lance Atual</Text>
+                    <Text style={styles.auctionInfoValue}>
+                      {detail.current_bid > 0 ? formatPrice(detail.current_bid) : "—"}
                     </Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Negotiate Modal */}
-      <Modal
-        visible={showNegotiateModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowNegotiateModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.negotiateModal}>
-            {selectedPlayer && (
-              <>
-                <LinearGradient
-                  colors={["#10B981", "#059669"]}
-                  style={styles.negotiateHeader}
-                >
-                  <Text style={styles.negotiateIcon}>💼</Text>
-                  <Text style={styles.negotiateTitle}>NEGOCIAÇÃO</Text>
-                  <Text style={styles.negotiateSubtitle}>
-                    {selectedPlayer.name}
-                  </Text>
-                </LinearGradient>
-
-                <View style={styles.negotiateBody}>
-                  <View style={styles.negotiateInfo}>
-                    <View style={styles.negotiateInfoRow}>
-                      <Text style={styles.negotiateInfoLabel}>
-                        Valor Pedido:
-                      </Text>
-                      <Text style={styles.negotiateInfoValue}>
-                        ${selectedPlayer.price.toLocaleString()}
-                      </Text>
-                    </View>
-                    <View style={styles.negotiateInfoRow}>
-                      <Text style={styles.negotiateInfoLabel}>
-                        Seu Orçamento:
-                      </Text>
-                      <Text
-                        style={[
-                          styles.negotiateInfoValue,
-                          { color: "#10B981" },
-                        ]}
-                      >
-                        ${budget.toLocaleString()}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.offerInputContainer}>
-                    <Text style={styles.offerInputLabel}>SUA OFERTA</Text>
-                    <View style={styles.offerInputWrapper}>
-                      <Text style={styles.offerCurrency}>$</Text>
-                      <TextInput
-                        style={styles.offerInput}
-                        placeholder="0"
-                        placeholderTextColor="#6B7280"
-                        keyboardType="numeric"
-                        value={offerAmount}
-                        onChangeText={setOfferAmount}
-                      />
-                    </View>
-
-                    {offerAmount && (
-                      <View style={styles.offerFeedback}>
-                        {parseInt(offerAmount) > budget ? (
-                          <Text style={styles.offerFeedbackError}>
-                            ❌ Você não tem orçamento suficiente
-                          </Text>
-                        ) : parseInt(offerAmount) <
-                          selectedPlayer.price * 0.8 ? (
-                          <Text style={styles.offerFeedbackWarning}>
-                            ⚠️ Oferta muito baixa - provavelmente será recusada
-                          </Text>
-                        ) : parseInt(offerAmount) < selectedPlayer.price ? (
-                          <Text style={styles.offerFeedbackInfo}>
-                            💭 Oferta razoável - pode ser aceita
-                          </Text>
-                        ) : (
-                          <Text style={styles.offerFeedbackSuccess}>
-                            ✅ Ótima oferta - alta chance de sucesso!
-                          </Text>
-                        )}
-                      </View>
+                    {detail.current_bidder_name && (
+                      <Text style={styles.auctionBidder}>{detail.current_bidder_name}</Text>
                     )}
                   </View>
-
-                  <View style={styles.offerSuggestions}>
-                    <Text style={styles.offerSuggestionsTitle}>
-                      OFERTAS RÁPIDAS
-                    </Text>
-                    <View style={styles.offerSuggestionsButtons}>
-                      <TouchableOpacity
-                        style={styles.suggestionButton}
-                        onPress={() =>
-                          setOfferAmount(
-                            (selectedPlayer.price * 0.8).toFixed(0),
-                          )
-                        }
-                      >
-                        <Text style={styles.suggestionButtonText}>80%</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.suggestionButton}
-                        onPress={() =>
-                          setOfferAmount(
-                            (selectedPlayer.price * 0.9).toFixed(0),
-                          )
-                        }
-                      >
-                        <Text style={styles.suggestionButtonText}>90%</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.suggestionButton,
-                          styles.suggestionButtonHighlight,
-                        ]}
-                        onPress={() =>
-                          setOfferAmount(selectedPlayer.price.toString())
-                        }
-                      >
-                        <Text
-                          style={[
-                            styles.suggestionButtonText,
-                            styles.suggestionButtonTextHighlight,
-                          ]}
-                        >
-                          100%
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.suggestionButton}
-                        onPress={() =>
-                          setOfferAmount(
-                            (selectedPlayer.price * 1.1).toFixed(0),
-                          )
-                        }
-                      >
-                        <Text style={styles.suggestionButtonText}>110%</Text>
-                      </TouchableOpacity>
-                    </View>
+                  <View style={styles.auctionInfoDivider} />
+                  <View style={styles.auctionInfoItem}>
+                    <Text style={styles.auctionInfoLabel}>Preço Inicial</Text>
+                    <Text style={styles.auctionInfoValue}>{formatPrice(detail.start_price)}</Text>
                   </View>
-
-                  <View style={styles.negotiateActions}>
-                    <TouchableOpacity
-                      style={styles.negotiateButtonSecondary}
-                      onPress={() => {
-                        setShowNegotiateModal(false);
-                        setShowPlayerModal(true);
-                      }}
-                    >
-                      <Text style={styles.negotiateButtonTextSecondary}>
-                        CANCELAR
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.negotiateButtonPrimary,
-                        (!offerAmount || parseInt(offerAmount) > budget) &&
-                          styles.negotiateButtonDisabled,
-                      ]}
-                      onPress={handleSendOffer}
-                      disabled={!offerAmount || parseInt(offerAmount) > budget}
-                    >
-                      <Text style={styles.negotiateButtonTextPrimary}>
-                        ENVIAR OFERTA
-                      </Text>
-                    </TouchableOpacity>
+                  <View style={styles.auctionInfoDivider} />
+                  <View style={styles.auctionInfoItem}>
+                    <Text style={styles.auctionInfoLabel}>Tempo</Text>
+                    {(() => {
+                      const cd = formatCountdown(detail.ends_at);
+                      return (
+                        <Text style={[styles.auctionInfoValue, cd.urgent && { color: "#EF4444" }]}>
+                          {cd.text}
+                        </Text>
+                      );
+                    })()}
                   </View>
                 </View>
-              </>
+
+                {/* ── Bid section (not shown for seller) */}
+                {detail.seller_team_id !== myTeamId ? (
+                  <>
+                    <View style={styles.divider} />
+
+                    {(bidState === "idle" || bidState === "error") && (
+                      <>
+                        <Text style={styles.bidTitle}>FAZER LANCE</Text>
+                        <Text style={styles.bidSub}>
+                          Mínimo:{" "}
+                          <Text style={{ color: "#FFF", fontWeight: "700" }}>
+                            {formatPrice(Math.max(detail.current_bid, detail.start_price) + 1)}
+                          </Text>
+                        </Text>
+
+                        <View style={styles.offerInputWrap}>
+                          <Text style={styles.offerDollar}>$</Text>
+                          <TextInput
+                            style={styles.offerInput}
+                            keyboardType="numeric"
+                            value={bidValue}
+                            onChangeText={(v) => {
+                              setBidValue(v);
+                              setBidError("");
+                            }}
+                            placeholderTextColor="#4B5563"
+                          />
+                        </View>
+
+                        {/* Quick bids */}
+                        <View style={styles.quickOffers}>
+                          {[
+                            { label: "+$500", val: Math.max(detail.current_bid, detail.start_price) + 500 },
+                            { label: "+10%", val: Math.round(Math.max(detail.current_bid, detail.start_price) * 1.1) },
+                            { label: "+25%", val: Math.round(Math.max(detail.current_bid, detail.start_price) * 1.25) },
+                            { label: "+50%", val: Math.round(Math.max(detail.current_bid, detail.start_price) * 1.5) },
+                          ].map((q) => (
+                            <TouchableOpacity
+                              key={q.label}
+                              style={styles.quickBtn}
+                              onPress={() => setBidValue(String(q.val))}
+                            >
+                              <Text style={styles.quickBtnMult}>{q.label}</Text>
+                              <Text style={styles.quickBtnVal}>{formatPrice(q.val)}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+
+                        {bidError ? (
+                          <View style={styles.warningRow}>
+                            <Text style={styles.warningText}>{bidError}</Text>
+                          </View>
+                        ) : (budget !== null && parseInt(bidValue || "0") > budget) ? (
+                          <View style={styles.warningRow}>
+                            <Text style={styles.warningText}>⚠️ Valor excede seu orçamento</Text>
+                          </View>
+                        ) : null}
+
+                        <View style={styles.sheetActions}>
+                          <TouchableOpacity style={styles.btnCancel} onPress={closeDetail}>
+                            <Text style={styles.btnCancelText}>FECHAR</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.btnConfirm,
+                              (budget !== null && parseInt(bidValue || "0") > budget) &&
+                                styles.btnConfirmDisabled,
+                            ]}
+                            disabled={budget !== null && parseInt(bidValue || "0") > budget}
+                            onPress={submitBid}
+                          >
+                            <Text style={styles.btnConfirmText}>DAR LANCE</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </>
+                    )}
+
+                    {bidState === "loading" && (
+                      <View style={styles.feedbackWrap}>
+                        <ActivityIndicator size="large" color="#6366F1" />
+                        <Text style={styles.feedbackTitle}>Registrando lance...</Text>
+                      </View>
+                    )}
+
+                    {bidState === "success" && (
+                      <View style={styles.feedbackWrap}>
+                        <Text style={styles.feedbackEmoji}>🔨</Text>
+                        <Text style={[styles.feedbackTitle, { color: "#10B981" }]}>
+                          LANCE REGISTRADO!
+                        </Text>
+                        <Text style={styles.feedbackSub}>
+                          Você está vencendo com {formatPrice(parseInt(bidValue))}
+                        </Text>
+                        <Text style={styles.feedbackSub}>
+                          O jogador é seu se ninguém superar antes do fim
+                        </Text>
+                        <TouchableOpacity
+                          style={[styles.btnConfirm, { marginTop: 16, alignSelf: "stretch" }]}
+                          onPress={closeDetail}
+                        >
+                          <Text style={styles.btnConfirmText}>ÓTIMO!</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <View style={[styles.warningRow, styles.infoRow]}>
+                    <Text style={[styles.warningText, { color: "#6366F1" }]}>
+                      Este jogador do seu time está sendo leiloado
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ height: 24 }} />
+              </ScrollView>
             )}
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000000",
-  },
+  safe: { flex: 1, backgroundColor: "#080808" },
 
   // Header
   header: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    letterSpacing: 2,
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
+    justifyContent: "center", alignItems: "center",
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#D1FAE5",
-    marginTop: 4,
+  backIcon: { fontSize: 22, color: "#FFFFFF", lineHeight: 24, marginTop: -2 },
+  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
+  headerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#6366F1" },
+  headerTitle: { fontSize: 16, fontWeight: "900", color: "#FFFFFF", letterSpacing: 4 },
+  budgetPill: {
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignItems: "flex-end",
   },
-  budgetCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 20,
-    gap: 12,
-  },
-  budgetIcon: {
-    fontSize: 32,
-  },
-  budgetValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  budgetLabel: {
-    fontSize: 12,
-    color: "#D1FAE5",
-  },
-
-  // Content
-  content: {
-    flex: 1,
-    backgroundColor: "#000000",
-  },
+  budgetLabel: { fontSize: 9, color: "#6B7280", fontWeight: "700", letterSpacing: 1 },
+  budgetValue: { fontSize: 14, fontWeight: "900", color: "#10B981" },
 
   // Search
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0A0A0A",
-    margin: 20,
-    marginBottom: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-    gap: 12,
+  searchWrap: {
+    flexDirection: "row", alignItems: "center",
+    marginHorizontal: 16, marginBottom: 12,
+    backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#1A1A1A",
+    borderRadius: 10, paddingHorizontal: 14, height: 42, gap: 8,
   },
-  searchIcon: {
-    fontSize: 20,
-  },
-  searchInput: {
-    flex: 1,
-    color: "#FFFFFF",
-    fontSize: 16,
-  },
+  searchIcon: { fontSize: 14 },
+  searchInput: { flex: 1, color: "#FFFFFF", fontSize: 14 },
+  searchClear: { fontSize: 13, color: "#4B5563", padding: 4 },
 
   // Filters
-  filtersContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+  filtersScroll: { marginBottom: 8 },
+  filtersContent: { paddingHorizontal: 16, gap: 8 },
+  filterPill: {
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
+    backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#1A1A1A",
   },
-  filtersContent: {
-    gap: 8,
-  },
-  filterChip: {
-    backgroundColor: "#0A0A0A",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  filterChipActive: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
-  },
-  filterChipText: {
-    color: "#6B7280",
-    fontSize: 12,
-    fontWeight: "bold",
-    letterSpacing: 1,
-  },
-  filterChipTextActive: {
-    color: "#000000",
-  },
+  filterPillActive: { backgroundColor: "#6366F122", borderColor: "#6366F1" },
+  filterPillText: { fontSize: 11, fontWeight: "700", color: "#6B7280", letterSpacing: 0.5 },
+  filterPillTextActive: { color: "#6366F1" },
 
-  // Players List
-  playersList: {
-    flex: 1,
-    paddingHorizontal: 20,
+  // Sort row
+  sortRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, marginBottom: 10, gap: 6,
   },
-  playersGrid: {
-    gap: 16,
+  sortLabel: { fontSize: 11, color: "#4B5563", marginRight: 2 },
+  sortBtn: {
+    paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 6, backgroundColor: "#0D0D0D",
+    borderWidth: 1, borderColor: "#1A1A1A",
   },
+  sortBtnActive: { backgroundColor: "#1A1A2E", borderColor: "#6366F1" },
+  sortBtnText: { fontSize: 11, color: "#6B7280", fontWeight: "600" },
+  sortBtnTextActive: { color: "#6366F1" },
+  sortCount: { flex: 1, textAlign: "right", fontSize: 11, color: "#374151" },
 
-  // Player Card
-  playerCard: {
-    backgroundColor: "#0A0A0A",
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  playerCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16,
-  },
-  playerBasicInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  playerNationality: {
-    fontSize: 32,
-  },
-  playerName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  playerTeam: {
-    fontSize: 13,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  ratingBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  ratingText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#000000",
-  },
-  playerInfo: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1F1F1F",
-  },
-  playerInfoItem: {
-    alignItems: "center",
-  },
-  playerInfoLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 4,
-  },
-  playerInfoValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#10B981",
-  },
-  statsPreview: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginBottom: 16,
-    backgroundColor: "#000000",
-    padding: 12,
-    borderRadius: 6,
-  },
-  statPreviewItem: {
-    alignItems: "center",
-  },
-  statPreviewValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#10B981",
-    marginBottom: 2,
-  },
-  statPreviewLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-  },
-  personalityTags: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 16,
-  },
-  personalityTag: {
-    backgroundColor: "#1F1F1F",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  personalityTagText: {
-    fontSize: 11,
-    color: "#10B981",
-    fontWeight: "600",
-  },
-  priceContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#1F1F1F",
-    marginBottom: 12,
-  },
-  priceLabel: {
-    fontSize: 11,
-    color: "#6B7280",
-    marginBottom: 4,
-  },
-  priceValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#10B981",
-  },
-  salaryText: {
-    fontSize: 12,
-    color: "#6B7280",
-  },
-  viewDetailsArrow: {
-    alignItems: "center",
-  },
-  viewDetailsText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 1,
-  },
+  // Empty state
+  emptyWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 32 },
+  emptyEmoji: { fontSize: 40, marginBottom: 4 },
+  emptyText: { fontSize: 15, fontWeight: "700", color: "#6B7280" },
+  emptySub: { fontSize: 12, color: "#374151", textAlign: "center" },
 
-  // Empty State
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
+  // Auction card
+  list: { flex: 1 },
+  listInner: { paddingHorizontal: 16, gap: 8 },
+  auctionCard: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#0D0D0D", borderRadius: 12,
+    borderWidth: 1, borderColor: "#1A1A1A",
+    paddingHorizontal: 14, paddingVertical: 12, gap: 10,
   },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+  auctionCardMyBid: { borderColor: "#10B98144", backgroundColor: "#0A1A12" },
+  cardRank: { fontSize: 11, color: "#374151", fontWeight: "700", width: 22 },
+  cardAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: "#161616", borderWidth: 1.5,
+    justifyContent: "center", alignItems: "center",
   },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#6B7280",
-    marginBottom: 8,
+  cardAvatarText: { fontSize: 16, fontWeight: "700", color: "#9CA3AF" },
+  cardInfo: { flex: 1, gap: 3 },
+  cardNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cardName: { fontSize: 14, fontWeight: "700", color: "#FFFFFF" },
+  myBadge: {
+    backgroundColor: "#6366F122", borderWidth: 1, borderColor: "#6366F155",
+    borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1,
   },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: "#4B5563",
-  },
+  myBadgeWinning: { backgroundColor: "#10B98122", borderColor: "#10B98155" },
+  myBadgeText: { fontSize: 8, fontWeight: "800", color: "#6366F1", letterSpacing: 0.5 },
+  cardMetaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  roleTag: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  roleTagText: { fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
+  cardTeam: { fontSize: 11, color: "#6B7280" },
+  cardAge: { fontSize: 11, color: "#4B5563" },
+  cardBidRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardBidLabel: { fontSize: 10, color: "#4B5563" },
+  cardBidValue: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
+  cardRight: { alignItems: "flex-end", gap: 4 },
+  ratingBadge: { borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  ratingValue: { fontSize: 14, fontWeight: "900" },
+  countdown: { fontSize: 10, fontWeight: "700", color: "#6B7280" },
+  countdownUrgent: { color: "#EF4444" },
+  avgSkill: { fontSize: 10, color: "#4B5563" },
 
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#000000",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  // Overlay / Sheet
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: "#0D0D0D",
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    borderWidth: 1, borderColor: "#1A1A1A",
+    paddingHorizontal: 20, paddingTop: 12,
     maxHeight: "90%",
   },
-  modalHeader: {
-    padding: 24,
-    alignItems: "center",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  modalNationality: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  modalPlayerName: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 4,
-  },
-  modalPlayerTeam: {
-    fontSize: 16,
-    color: "#D1FAE5",
-    marginBottom: 16,
-  },
-  modalRatings: {
-    flexDirection: "row",
-    gap: 24,
-  },
-  modalRatingItem: {
-    alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.3)",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  modalRatingValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  modalRatingLabel: {
-    fontSize: 11,
-    color: "#D1FAE5",
-    marginTop: 4,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  modalSection: {
-    marginBottom: 24,
-  },
-  modalSectionTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 2,
-    marginBottom: 12,
-  },
-  modalInfoGrid: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  modalInfoCard: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  modalInfoCardLabel: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 6,
-  },
-  modalInfoCardValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  modalStatsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  modalStatCard: {
-    width: (width - 64) / 3,
-    backgroundColor: "#0A0A0A",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  modalStatValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#10B981",
-    marginBottom: 4,
-  },
-  modalStatLabel: {
-    fontSize: 10,
-    color: "#6B7280",
-  },
-  modalPersonality: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  modalPersonalityTag: {
-    backgroundColor: "#0A0A0A",
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  modalPersonalityText: {
-    fontSize: 14,
-    color: "#10B981",
-  },
-  modalCostCard: {
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-  },
-  modalCostRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  modalCostLabel: {
-    fontSize: 14,
-    color: "#6B7280",
-  },
-  modalCostValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  modalCostDivider: {
-    height: 1,
-    backgroundColor: "#1F1F1F",
-    marginVertical: 8,
-  },
-  modalCostTotal: {
-    color: "#10B981",
-    fontSize: 18,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: "#0A0A0A",
-  },
-  modalButtonSecondary: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  modalButtonTextSecondary: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#6B7280",
-    letterSpacing: 1,
-  },
-  modalButtonPrimary: {
-    flex: 1,
-    backgroundColor: "#10B981",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  modalButtonTextPrimary: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#000000",
-    letterSpacing: 1,
+  sheetHandle: {
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: "#2A2A2A", alignSelf: "center", marginBottom: 20,
   },
 
-  // Negotiate Modal
-  negotiateModal: {
-    backgroundColor: "#000000",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "80%",
+  // Detail
+  detailHeader: { flexDirection: "row", gap: 14, marginBottom: 16 },
+  detailAvatar: {
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: "#161616", borderWidth: 2,
+    justifyContent: "center", alignItems: "center", flexShrink: 0,
   },
-  negotiateHeader: {
-    padding: 24,
-    alignItems: "center",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+  detailAvatarText: { fontSize: 22, fontWeight: "700", color: "#9CA3AF" },
+  detailName: { fontSize: 18, fontWeight: "900", color: "#FFFFFF", marginBottom: 4 },
+  detailMetaRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  detailAge: { fontSize: 12, color: "#6B7280" },
+  sellerRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  sellerLabel: { fontSize: 10, color: "#4B5563" },
+  sellerName: { fontSize: 12, fontWeight: "700", color: "#9CA3AF" },
+
+  // Stats
+  statsRow: { flexDirection: "row", gap: 6, marginBottom: 16 },
+  statCard: {
+    flex: 1, backgroundColor: "#111", borderWidth: 1, borderColor: "#1A1A1A",
+    borderRadius: 10, padding: 10, alignItems: "center",
   },
-  negotiateIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  statValue: { fontSize: 16, fontWeight: "900" },
+  statLabel: { fontSize: 9, color: "#6B7280", marginTop: 2, fontWeight: "600" },
+
+  // Skills
+  sectionTitle: {
+    fontSize: 10, fontWeight: "900", color: "#374151",
+    letterSpacing: 2, marginBottom: 10,
   },
-  negotiateTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    letterSpacing: 2,
+  skillsGrid: { gap: 7, marginBottom: 16 },
+  skillRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  skillName: { fontSize: 10, color: "#6B7280", width: 80, fontWeight: "600" },
+  skillBarBg: {
+    flex: 1, height: 6, backgroundColor: "#1A1A1A", borderRadius: 3, overflow: "hidden",
   },
-  negotiateSubtitle: {
-    fontSize: 16,
-    color: "#D1FAE5",
-    marginTop: 4,
+  skillBarFill: { height: 6, borderRadius: 3 },
+  skillValue: { fontSize: 10, fontWeight: "700", color: "#9CA3AF", width: 22, textAlign: "right" },
+
+  divider: { height: 1, backgroundColor: "#1A1A1A", marginBottom: 14, marginTop: 4 },
+
+  // Auction info
+  auctionInfoRow: {
+    flexDirection: "row", marginBottom: 16,
+    backgroundColor: "#111", borderWidth: 1, borderColor: "#1A1A1A",
+    borderRadius: 12, overflow: "hidden",
   },
-  negotiateBody: {
-    padding: 20,
+  auctionInfoItem: { flex: 1, padding: 14, alignItems: "center" },
+  auctionInfoDivider: { width: 1, backgroundColor: "#1A1A1A" },
+  auctionInfoLabel: { fontSize: 10, color: "#6B7280", marginBottom: 4 },
+  auctionInfoValue: { fontSize: 14, fontWeight: "900", color: "#FFFFFF" },
+  auctionBidder: { fontSize: 9, color: "#10B981", marginTop: 2 },
+
+  // Bid form
+  bidTitle: {
+    fontSize: 13, fontWeight: "900", color: "#FFFFFF",
+    letterSpacing: 2, marginBottom: 4,
   },
-  negotiateInfo: {
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 24,
-    gap: 12,
+  bidSub: { fontSize: 12, color: "#6B7280", marginBottom: 14 },
+  offerInputWrap: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: "#111", borderWidth: 1, borderColor: "#242424",
+    borderRadius: 10, paddingHorizontal: 14, height: 52, gap: 6, marginBottom: 12,
   },
-  negotiateInfoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+  offerDollar: { fontSize: 18, color: "#6B7280", fontWeight: "700" },
+  offerInput: { flex: 1, fontSize: 22, fontWeight: "900", color: "#FFFFFF" },
+  quickOffers: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  quickBtn: {
+    flex: 1, backgroundColor: "#111", borderWidth: 1, borderColor: "#1A1A1A",
+    borderRadius: 8, paddingVertical: 8, alignItems: "center",
   },
-  negotiateInfoLabel: {
-    fontSize: 14,
-    color: "#6B7280",
+  quickBtnMult: { fontSize: 11, color: "#9CA3AF", fontWeight: "700" },
+  quickBtnVal: { fontSize: 10, color: "#6B7280", marginTop: 2 },
+  warningRow: {
+    backgroundColor: "rgba(239,68,68,0.08)", borderWidth: 1, borderColor: "rgba(239,68,68,0.2)",
+    borderRadius: 8, padding: 10, marginBottom: 12,
   },
-  negotiateInfoValue: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
+  infoRow: {
+    backgroundColor: "#6366F111", borderColor: "#6366F144", marginTop: 12,
   },
-  offerInputContainer: {
-    marginBottom: 24,
-  },
-  offerInputLabel: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 2,
-    marginBottom: 12,
-  },
-  offerInputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0A0A0A",
-    borderWidth: 2,
-    borderColor: "#10B981",
-    borderRadius: 8,
-    paddingHorizontal: 16,
-  },
-  offerCurrency: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#10B981",
-    marginRight: 8,
-  },
-  offerInput: {
-    flex: 1,
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    paddingVertical: 16,
-  },
-  offerFeedback: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: "#0A0A0A",
-    borderRadius: 8,
-  },
-  offerFeedbackError: {
-    fontSize: 13,
-    color: "#EF4444",
-  },
-  offerFeedbackWarning: {
-    fontSize: 13,
-    color: "#F59E0B",
-  },
-  offerFeedbackInfo: {
-    fontSize: 13,
-    color: "#3B82F6",
-  },
-  offerFeedbackSuccess: {
-    fontSize: 13,
-    color: "#10B981",
-  },
-  offerSuggestions: {
-    marginBottom: 24,
-  },
-  offerSuggestionsTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#6B7280",
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  offerSuggestionsButtons: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  suggestionButton: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  suggestionButtonHighlight: {
-    backgroundColor: "#10B981",
-    borderColor: "#10B981",
-  },
-  suggestionButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#6B7280",
-  },
-  suggestionButtonTextHighlight: {
-    color: "#000000",
-  },
-  negotiateActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  negotiateButtonSecondary: {
-    flex: 1,
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  negotiateButtonTextSecondary: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#6B7280",
-    letterSpacing: 1,
-  },
-  negotiateButtonPrimary: {
-    flex: 1,
-    backgroundColor: "#10B981",
-    padding: 16,
-    borderRadius: 8,
+  warningText: { fontSize: 12, color: "#EF4444", fontWeight: "600" },
+
+  // Actions
+  sheetActions: { flexDirection: "row", gap: 12, marginTop: 4 },
+  btnCancel: {
+    flex: 1, paddingVertical: 14, borderRadius: 10,
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
     alignItems: "center",
   },
-  negotiateButtonDisabled: {
-    backgroundColor: "#1F1F1F",
+  btnCancelText: { fontSize: 13, fontWeight: "700", color: "#6B7280", letterSpacing: 1 },
+  btnConfirm: {
+    flex: 2, paddingVertical: 14, borderRadius: 10,
+    backgroundColor: "#6366F1", alignItems: "center",
   },
-  negotiateButtonTextPrimary: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#000000",
-    letterSpacing: 1,
-  },
+  btnConfirmDisabled: { backgroundColor: "#1A1A2E", opacity: 0.5 },
+  btnConfirmText: { fontSize: 13, fontWeight: "900", color: "#FFFFFF", letterSpacing: 1 },
+
+  // Feedback
+  feedbackWrap: { paddingVertical: 24, alignItems: "center", gap: 8 },
+  feedbackEmoji: { fontSize: 40, marginBottom: 4 },
+  feedbackTitle: { fontSize: 15, fontWeight: "900", color: "#FFFFFF", letterSpacing: 2 },
+  feedbackSub: { fontSize: 12, color: "#6B7280", textAlign: "center" },
 });

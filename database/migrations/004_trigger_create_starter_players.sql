@@ -20,14 +20,9 @@ declare
     'Frost', 'Blaze', 'Echo', 'Jinx', 'Specter'
   ];
   roles text[] := array['IGL', 'AWPer', 'Support', 'Entry', 'Flex'];
-  statuses text[] := array['online', 'offline', 'injured'];
-  status_weights int[] := array[40, 35, 25]; -- peso: 40% online, 35% offline, 25% injured
-
   i int;
   chosen_name text;
   chosen_role text;
-  chosen_status text;
-  rand int;
   new_player_id uuid;
 
   -- Stats iniciais muito baixos (faixa 20-55)
@@ -48,16 +43,6 @@ begin
   for i in 1..5 loop
     chosen_name   := names[i];
     chosen_role   := roles[i]; -- cada role uma vez
-
-    -- Status ponderado
-    rand := public.random_int(1, 100);
-    if rand <= 40 then
-      chosen_status := 'online';
-    elsif rand <= 75 then
-      chosen_status := 'offline';
-    else
-      chosen_status := 'injured';
-    end if;
 
     -- Stats baixos
     v_rating  := public.random_int(20, 52);
@@ -80,7 +65,7 @@ begin
       new.id,
       chosen_name,
       chosen_role,
-      chosen_status,
+      'online',
       v_rating,
       v_salary,
       public.random_int(1, 12) || ' meses',

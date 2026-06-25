@@ -8,7 +8,7 @@ type TeamCardProps = {
   onPress?: () => void;
 };
 
-type PlayerStatus = "online" | "offline" | "injured" | "banned";
+type PlayerStatus = "online" | "injured" | "banned";
 type PlayerRole = "IGL" | "AWPer" | "Support" | "Entry" | "Flex";
 
 export type Player = {
@@ -20,7 +20,6 @@ export type Player = {
 
 const statusColors: Record<PlayerStatus, string> = {
   online: "#4CAF50",
-  offline: "#9E9E9E",
   injured: "#FFC107",
   banned: "#F44336",
 };

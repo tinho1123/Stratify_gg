@@ -31,6 +31,20 @@ export default function DashboardLayout() {
         }}
       />
       <Stack.Screen
+        name="tactics"
+        options={{
+          headerShown: false,
+          title: "Táticas",
+        }}
+      />
+      <Stack.Screen
+        name="matches"
+        options={{
+          headerShown: false,
+          title: "Partidas",
+        }}
+      />
+      <Stack.Screen
         name="profile"
         options={{
           headerShown: false,

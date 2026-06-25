@@ -21,11 +21,12 @@ interface Player {
   id: string;
   name: string;
   role: string;
-  status: "online" | "offline" | "injured" | "banned";
+  status: "online" | "injured" | "banned";
   rating: number;
 }
 
 interface Team {
+  id: string;
   name: string;
   budget: number;
   ranking: number;
@@ -45,14 +46,12 @@ interface Notification {
 
 const STATUS_COLOR: Record<string, string> = {
   online: "#10B981",
-  offline: "#6B7280",
   injured: "#EF4444",
   banned: "#F59E0B",
 };
 
 const STATUS_LABEL: Record<string, string> = {
   online: "ONLINE",
-  offline: "OFFLINE",
   injured: "LESÃO",
   banned: "BANIDO",
 };
@@ -80,19 +79,23 @@ export default function HomeScreen() {
 
   useEffect(() => {
     supabase
-      .from("players")
-      .select("id, name, role, status, rating")
-      .then(({ data, error }) => {
-        if (!error && data) setPlayers(data as Player[]);
-        setLoadingPlayers(false);
-      });
-
-    supabase
       .from("teams")
-      .select("name, budget, ranking, fans, wins, losses")
+      .select("id, name, budget, ranking, fans, wins, losses")
       .single()
       .then(({ data, error }) => {
-        if (!error && data) setTeam(data as Team);
+        if (!error && data) {
+          setTeam(data as Team);
+          supabase
+            .from("players")
+            .select("id, name, role, status, rating")
+            .eq("team_id", data.id)
+            .then(({ data: pd, error: pe }) => {
+              if (!pe && pd) setPlayers(pd as Player[]);
+              setLoadingPlayers(false);
+            });
+        } else {
+          setLoadingPlayers(false);
+        }
       });
 
     supabase
@@ -274,40 +277,6 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* ── ALERTAS (últimas 3 notificações) ────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>ALERTAS</Text>
-            <TouchableOpacity onPress={openNotifications}>
-              <Text style={styles.sectionLink}>ver todos</Text>
-            </TouchableOpacity>
-          </View>
-
-          {notifications.length === 0 ? (
-            <View style={styles.playersEmpty}>
-              <Text style={styles.playersEmptyText}>Nenhum alerta</Text>
-            </View>
-          ) : (
-            notifications.slice(0, 3).map((item) => {
-              const c = NEWS_COLORS[item.type];
-              return (
-                <TouchableOpacity
-                  key={item.id}
-                  activeOpacity={0.75}
-                  onPress={openNotifications}
-                  style={[styles.newsCard, { borderColor: c.border, backgroundColor: c.bg }]}
-                >
-                  <View style={[styles.newsTag, { backgroundColor: c.tag }]}>
-                    <Text style={styles.newsTagText}>{item.tag}</Text>
-                  </View>
-                  <Text style={styles.newsMsg}>{item.message}</Text>
-                  <Text style={styles.newsChevron}>›</Text>
-                </TouchableOpacity>
-              );
-            })
-          )}
-        </View>
-
         {/* ── TIME PRINCIPAL ─────────────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionRow}>
@@ -368,8 +337,8 @@ export default function HomeScreen() {
             {[
               { icon: "🎯", label: "TREINAR",  sub: "Melhorar skills",     route: "/dashboard/training",    accent: "#10B981" },
               { icon: "🏪", label: "MERCADO",  sub: "Contratar jogadores",  route: "/dashboard/market",      accent: "#6366F1" },
-              { icon: "📋", label: "TÁTICAS",  sub: "Estratégias do time",  route: null,                     accent: "#F59E0B" },
-              { icon: "🎮", label: "PARTIDAS", sub: "Ver calendário",       route: null,                     accent: "#EC4899" },
+              { icon: "📋", label: "TÁTICAS",  sub: "Estratégias do time",  route: "/dashboard/tactics",     accent: "#F59E0B" },
+              { icon: "🎮", label: "PARTIDAS", sub: "Ver calendário",       route: "/dashboard/matches",     accent: "#EC4899" },
             ].map((a, i) => (
               <TouchableOpacity
                 key={i}

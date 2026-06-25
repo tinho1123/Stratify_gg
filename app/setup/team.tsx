@@ -1,3 +1,4 @@
+import { generateStarterPlayers } from "@/database/generateStarterPlayers";
 import { supabase } from "@/database/supabase";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -37,15 +38,30 @@ export default function SetupTeamScreen() {
       return;
     }
     setLoading(true);
-    const { error: updateError } = await supabase
-      .from("teams")
-      .update({ name, onboarded: true })
-      .eq("onboarded", false);
-    setLoading(false);
-    if (updateError) {
-      setError("Erro ao salvar. Tente novamente.");
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setError("Sessão expirada. Faça login novamente.");
+      setLoading(false);
       return;
     }
+
+    const { data: teamData, error: upsertError } = await supabase
+      .from("teams")
+      .upsert(
+        { user_id: user.id, name, onboarded: true },
+        { onConflict: "user_id" }
+      )
+      .select("id")
+      .single();
+
+    if (upsertError || !teamData) {
+      setError("Erro ao salvar. Tente novamente.");
+      setLoading(false);
+      return;
+    }
+
+    await generateStarterPlayers(user.id, teamData.id);
+    setLoading(false);
     router.replace("/dashboard");
   };
 

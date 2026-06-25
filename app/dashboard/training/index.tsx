@@ -1,14 +1,19 @@
+import { supabase } from "@/database/supabase";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState } from "react";
+import { router } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Dimensions,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
@@ -16,8 +21,8 @@ interface Player {
   id: string;
   name: string;
   role: string;
-  energy: number;
-  selected: boolean;
+  rating: number;
+  status: "online" | "injured" | "banned";
 }
 
 interface TrainingType {
@@ -25,886 +30,910 @@ interface TrainingType {
   name: string;
   icon: string;
   description: string;
-  duration: number;
+  duration: string;
   energyCost: number;
   benefit: string;
   color: string;
 }
 
+const TRAINING_TYPES: TrainingType[] = [
+  {
+    id: "1",
+    name: "AIM TRAINING",
+    icon: "🎯",
+    description: "Treino intensivo de mira e precisão",
+    duration: "2h",
+    energyCost: 20,
+    benefit: "+5 Precisão  +3 Reação",
+    color: "#EF4444",
+  },
+  {
+    id: "2",
+    name: "ESTRATÉGIA",
+    icon: "🧠",
+    description: "Estudo de táticas e map control",
+    duration: "3h",
+    energyCost: 15,
+    benefit: "+7 IQ de Jogo  +4 Comunicação",
+    color: "#3B82F6",
+  },
+  {
+    id: "3",
+    name: "CLUTCH TRAINING",
+    icon: "⚡",
+    description: "Situações de pressão 1vX",
+    duration: "2h",
+    energyCost: 25,
+    benefit: "+6 Mental  +5 Decisão",
+    color: "#F59E0B",
+  },
+  {
+    id: "4",
+    name: "SPRAY CONTROL",
+    icon: "🔫",
+    description: "Controle de recuo e spray patterns",
+    duration: "2h",
+    energyCost: 18,
+    benefit: "+5 Controle  +4 Consistência",
+    color: "#8B5CF6",
+  },
+  {
+    id: "5",
+    name: "MOVIMENTO",
+    icon: "🏃",
+    description: "Peek, strafe e positioning",
+    duration: "2h",
+    energyCost: 20,
+    benefit: "+6 Agilidade  +3 Positioning",
+    color: "#10B981",
+  },
+  {
+    id: "6",
+    name: "TEAM PRACTICE",
+    icon: "👥",
+    description: "Scrims e treino em equipe",
+    duration: "4h",
+    energyCost: 30,
+    benefit: "+8 Sincronia  +6 Química",
+    color: "#EC4899",
+  },
+];
+
+type FeedbackState = "idle" | "loading" | "success" | "error";
+
 export default function TrainingScreen() {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
-  const [selectedTraining, setSelectedTraining] = useState<TrainingType | null>(
-    null,
-  );
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [trainingInProgress, setTrainingInProgress] = useState(false);
-  const [sessionPoints, setSessionPoints] = useState(100);
+  const [selectedTraining, setSelectedTraining] = useState<TrainingType | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackState>("idle");
 
-  const players: Player[] = [
-    { id: "1", name: "Alice", role: "IGL", energy: 85, selected: false },
-    { id: "2", name: "Bob", role: "AWPer", energy: 75, selected: false },
-    { id: "3", name: "Charlie", role: "Support", energy: 90, selected: false },
-    { id: "4", name: "Diana", role: "Entry", energy: 30, selected: false },
-    { id: "5", name: "Eve", role: "Flex", energy: 88, selected: false },
-  ];
+  useEffect(() => {
+    supabase
+      .from("teams")
+      .select("id")
+      .single()
+      .then(({ data: team }) => {
+        if (!team) { setLoadingPlayers(false); return; }
+        supabase
+          .from("players")
+          .select("id, name, role, rating, status")
+          .eq("team_id", team.id)
+          .then(({ data, error }) => {
+            if (!error && data) setPlayers(data as Player[]);
+            setLoadingPlayers(false);
+          });
+      });
+  }, []);
 
-  const trainingTypes: TrainingType[] = [
-    {
-      id: "1",
-      name: "AIM TRAINING",
-      icon: "🎯",
-      description: "Treino intensivo de mira e precisão",
-      duration: 2,
-      energyCost: 20,
-      benefit: "+5 Precisão, +3 Reação",
-      color: "#EF4444",
-    },
-    {
-      id: "2",
-      name: "ESTRATÉGIA",
-      icon: "🧠",
-      description: "Estudo de táticas e map control",
-      duration: 3,
-      energyCost: 15,
-      benefit: "+7 IQ de Jogo, +4 Comunicação",
-      color: "#3B82F6",
-    },
-    {
-      id: "3",
-      name: "CLUTCH TRAINING",
-      icon: "⚡",
-      description: "Situações de pressão 1vX",
-      duration: 2,
-      energyCost: 25,
-      benefit: "+6 Mental, +5 Decisão",
-      color: "#F59E0B",
-    },
-    {
-      id: "4",
-      name: "SPRAY CONTROL",
-      icon: "🔫",
-      description: "Controle de recuo e spray patterns",
-      duration: 2,
-      energyCost: 18,
-      benefit: "+5 Controle, +4 Consistência",
-      color: "#8B5CF6",
-    },
-    {
-      id: "5",
-      name: "MOVIMENTO",
-      icon: "🏃",
-      description: "Peek, strafe e positioning",
-      duration: 2,
-      energyCost: 20,
-      benefit: "+6 Agilidade, +3 Positioning",
-      color: "#10B981",
-    },
-    {
-      id: "6",
-      name: "TEAM PRACTICE",
-      icon: "👥",
-      description: "Scrims e treino em equipe",
-      duration: 4,
-      energyCost: 30,
-      benefit: "+8 Sincronia, +6 Química",
-      color: "#EC4899",
-    },
-  ];
+  const availablePlayers = players.filter((p) => p.status !== "injured");
 
-  const togglePlayer = (playerId: string) => {
-    if (selectedPlayers.includes(playerId)) {
-      setSelectedPlayers(selectedPlayers.filter((id) => id !== playerId));
-    } else {
-      setSelectedPlayers([...selectedPlayers, playerId]);
-    }
+  const togglePlayer = (id: string) => {
+    setSelectedPlayers((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
-  const selectAllPlayers = () => {
-    const availablePlayers = players
-      .filter((p) => p.energy >= 30)
-      .map((p) => p.id);
-    setSelectedPlayers(availablePlayers);
-  };
-
-  const clearSelection = () => {
-    setSelectedPlayers([]);
-  };
-
-  const handleTrainingSelect = (training: TrainingType) => {
-    if (selectedPlayers.length === 0) {
-      alert("Selecione pelo menos um jogador!");
-      return;
-    }
+  const handleTrainingPress = (training: TrainingType) => {
+    if (selectedPlayers.length === 0) return;
     setSelectedTraining(training);
-    setShowConfirmModal(true);
+    setConfirmOpen(true);
   };
 
-  const startTraining = () => {
-    setShowConfirmModal(false);
-    setTrainingInProgress(true);
+  const startTraining = async () => {
+    if (!selectedTraining) return;
+    setConfirmOpen(false);
+    setFeedback("loading");
 
-    // Simula conclusão do treino após 3 segundos
-    setTimeout(() => {
-      setTrainingInProgress(false);
-      setSessionPoints(
-        sessionPoints -
-          (selectedTraining?.energyCost || 0) * selectedPlayers.length,
-      );
-      alert("Treino concluído com sucesso! 🎉");
-      setSelectedPlayers([]);
-      setSelectedTraining(null);
-    }, 3000);
+    await new Promise((r) => setTimeout(r, 2500));
+
+    setFeedback("success");
+    await new Promise((r) => setTimeout(r, 2000));
+
+    setFeedback("idle");
+    setSelectedPlayers([]);
+    setSelectedTraining(null);
   };
 
-  const getPlayerById = (id: string) => players.find((p) => p.id === id);
+  const selectedCount = selectedPlayers.length;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient colors={["#10B981", "#059669"]} style={styles.header}>
-        <Text style={styles.headerTitle}>CENTRO DE TREINAMENTO</Text>
-        <Text style={styles.headerSubtitle}>Desenvolva seu time</Text>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
 
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsIcon}>⚡</Text>
-          <View>
-            <Text style={styles.pointsValue}>{sessionPoints}</Text>
-            <Text style={styles.pointsLabel}>Pontos de Energia</Text>
+      {/* ── HEADER ───────────────────────────────────── */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <Text style={styles.backIcon}>‹</Text>
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <View style={styles.headerDot} />
+          <Text style={styles.headerTitle}>TREINAMENTO</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <View style={styles.energyPill}>
+            <Text style={styles.energyPillIcon}>⚡</Text>
+            <Text style={styles.energyPillText}>100 EP</Text>
           </View>
         </View>
-      </LinearGradient>
+      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Player Selection */}
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+
+        {/* ── SELEÇÃO DE JOGADORES ──────────────────── */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
+          <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>SELECIONAR JOGADORES</Text>
-            <View style={styles.sectionAccent} />
-          </View>
-
-          <View style={styles.selectionButtons}>
-            <TouchableOpacity
-              style={styles.selectionButton}
-              onPress={selectAllPlayers}
-            >
-              <Text style={styles.selectionButtonText}>TODOS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.selectionButton, styles.selectionButtonSecondary]}
-              onPress={clearSelection}
-            >
-              <Text
-                style={[
-                  styles.selectionButtonText,
-                  styles.selectionButtonTextSecondary,
-                ]}
+            <View style={styles.sectionRowActions}>
+              <TouchableOpacity
+                onPress={() => setSelectedPlayers(availablePlayers.map((p) => p.id))}
               >
-                LIMPAR
-              </Text>
-            </TouchableOpacity>
+                <Text style={styles.sectionLink}>todos</Text>
+              </TouchableOpacity>
+              {selectedCount > 0 && (
+                <>
+                  <Text style={styles.sectionLinkSep}>·</Text>
+                  <TouchableOpacity onPress={() => setSelectedPlayers([])}>
+                    <Text style={[styles.sectionLink, { color: "#6B7280" }]}>limpar</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
           </View>
 
-          <Text style={styles.selectedCount}>
-            {selectedPlayers.length} jogador(es) selecionado(s)
-          </Text>
-
-          <View style={styles.playersGrid}>
-            {players.map((player) => {
-              const isSelected = selectedPlayers.includes(player.id);
-              const isDisabled = player.energy < 30;
-
-              return (
-                <TouchableOpacity
-                  key={player.id}
-                  style={[
-                    styles.playerCard,
-                    isSelected && styles.playerCardSelected,
-                    isDisabled && styles.playerCardDisabled,
-                  ]}
-                  onPress={() => !isDisabled && togglePlayer(player.id)}
-                  disabled={isDisabled}
-                  activeOpacity={0.7}
-                >
-                  {isSelected && (
-                    <View style={styles.selectedBadge}>
-                      <Text style={styles.selectedBadgeText}>✓</Text>
-                    </View>
-                  )}
-
-                  <Text
+          {loadingPlayers ? (
+            <View style={styles.centered}>
+              <ActivityIndicator size="small" color="#10B981" />
+            </View>
+          ) : players.length === 0 ? (
+            <View style={styles.centered}>
+              <Text style={styles.emptyText}>Nenhum jogador no time</Text>
+            </View>
+          ) : (
+            <View style={styles.playersGrid}>
+              {players.map((p) => {
+                const isSelected = selectedPlayers.includes(p.id);
+                const isInjured = p.status === "injured";
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    activeOpacity={isInjured ? 1 : 0.75}
+                    disabled={isInjured}
+                    onPress={() => togglePlayer(p.id)}
                     style={[
-                      styles.playerCardName,
-                      isDisabled && styles.playerCardNameDisabled,
+                      styles.playerCard,
+                      isSelected && styles.playerCardSelected,
+                      isInjured && styles.playerCardDisabled,
                     ]}
                   >
-                    {player.name}
-                  </Text>
-                  <Text style={styles.playerCardRole}>{player.role}</Text>
-
-                  <View style={styles.energyContainer}>
+                    {isSelected && (
+                      <View style={styles.checkBadge}>
+                        <Text style={styles.checkBadgeText}>✓</Text>
+                      </View>
+                    )}
+                    <View style={styles.playerAvatar}>
+                      <Text style={styles.playerAvatarText}>{p.name[0]}</Text>
+                    </View>
                     <Text
-                      style={[
-                        styles.energyLabel,
-                        isDisabled && styles.energyLabelLow,
-                      ]}
+                      style={[styles.playerName, isInjured && { color: "#4B5563" }]}
+                      numberOfLines={1}
                     >
-                      Energia
+                      {p.name}
                     </Text>
-                    <View style={styles.energyBar}>
-                      <View
+                    <Text style={styles.playerRole}>{p.role}</Text>
+                    <View style={styles.ratingRow}>
+                      <Text style={styles.ratingLabel}>RTG</Text>
+                      <Text
                         style={[
-                          styles.energyFill,
-                          { width: `${player.energy}%` },
-                          isDisabled && styles.energyFillLow,
+                          styles.ratingValue,
+                          { color: p.rating >= 90 ? "#10B981" : p.rating >= 75 ? "#F59E0B" : "#EF4444" },
                         ]}
-                      />
+                      >
+                        {p.rating}
+                      </Text>
                     </View>
-                    <Text
-                      style={[
-                        styles.energyValue,
-                        isDisabled && styles.energyValueLow,
-                      ]}
-                    >
-                      {player.energy}%
-                    </Text>
-                  </View>
+                    {isInjured && (
+                      <View style={styles.injuredOverlay}>
+                        <Text style={styles.injuredText}>LESÃO</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
 
-                  {isDisabled && (
-                    <View style={styles.disabledOverlay}>
-                      <Text style={styles.disabledText}>Cansado</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          {selectedCount > 0 && (
+            <View style={styles.selectionBar}>
+              <Text style={styles.selectionBarText}>
+                {selectedCount} jogador{selectedCount !== 1 ? "es" : ""} selecionado{selectedCount !== 1 ? "s" : ""}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {/* Training Types */}
+        {/* ── TIPOS DE TREINO ───────────────────────── */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>TIPOS DE TREINAMENTO</Text>
-            <View style={styles.sectionAccent} />
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>TIPOS DE TREINO</Text>
+            {selectedCount === 0 && (
+              <Text style={styles.sectionHint}>selecione jogadores primeiro</Text>
+            )}
           </View>
 
-          {trainingTypes.map((training) => (
-            <TouchableOpacity
-              key={training.id}
-              style={[styles.trainingCard, { borderLeftColor: training.color }]}
-              onPress={() => handleTrainingSelect(training)}
-              activeOpacity={0.7}
-              disabled={selectedPlayers.length === 0}
-            >
-              <View style={styles.trainingHeader}>
-                <View style={styles.trainingInfo}>
-                  <Text style={styles.trainingIcon}>{training.icon}</Text>
-                  <View>
-                    <Text style={styles.trainingName}>{training.name}</Text>
-                    <Text style={styles.trainingDescription}>
-                      {training.description}
+          {TRAINING_TYPES.map((t) => {
+            const disabled = selectedCount === 0;
+            return (
+              <TouchableOpacity
+                key={t.id}
+                activeOpacity={disabled ? 1 : 0.75}
+                disabled={disabled}
+                onPress={() => handleTrainingPress(t)}
+                style={[styles.trainingCard, disabled && styles.trainingCardDisabled]}
+              >
+                <View style={[styles.trainingAccent, { backgroundColor: t.color }]} />
+                <View style={styles.trainingLeft}>
+                  <View style={[styles.trainingIconWrap, { backgroundColor: t.color + "18" }]}>
+                    <Text style={styles.trainingIcon}>{t.icon}</Text>
+                  </View>
+                  <View style={styles.trainingInfo}>
+                    <Text style={[styles.trainingName, disabled && { color: "#4B5563" }]}>
+                      {t.name}
                     </Text>
+                    <Text style={styles.trainingDesc}>{t.description}</Text>
+                    <View style={[styles.benefitPill, { backgroundColor: t.color + "18" }]}>
+                      <Text style={[styles.benefitText, { color: t.color }]}>
+                        📈 {t.benefit}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-
-              <View style={styles.trainingStats}>
-                <View style={styles.trainingStatItem}>
-                  <Text style={styles.trainingStatIcon}>⏱️</Text>
-                  <Text style={styles.trainingStatText}>
-                    {training.duration}h
-                  </Text>
+                <View style={styles.trainingRight}>
+                  <View style={styles.trainingMeta}>
+                    <Text style={styles.trainingMetaIcon}>⏱</Text>
+                    <Text style={styles.trainingMetaValue}>{t.duration}</Text>
+                  </View>
+                  <View style={styles.trainingMeta}>
+                    <Text style={styles.trainingMetaIcon}>⚡</Text>
+                    <Text style={styles.trainingMetaValue}>-{t.energyCost}</Text>
+                  </View>
+                  <Text style={[styles.trainingChevron, disabled && { color: "#1F1F1F" }]}>›</Text>
                 </View>
-                <View style={styles.trainingStatItem}>
-                  <Text style={styles.trainingStatIcon}>⚡</Text>
-                  <Text style={styles.trainingStatText}>
-                    -{training.energyCost}%
-                  </Text>
-                </View>
-              </View>
-
-              <View
-                style={[
-                  styles.trainingBenefit,
-                  { backgroundColor: training.color + "20" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.trainingBenefitText,
-                    { color: training.color },
-                  ]}
-                >
-                  📈 {training.benefit}
-                </Text>
-              </View>
-
-              <View style={styles.trainingArrow}>
-                <Text style={styles.trainingArrowText}>▶</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 32 }} />
       </ScrollView>
 
-      {/* Confirm Training Modal */}
+      {/* ── MODAL DE CONFIRMAÇÃO ─────────────────────── */}
       <Modal
-        visible={showConfirmModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowConfirmModal(false)}
+        visible={confirmOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setConfirmOpen(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <Pressable style={styles.overlay} onPress={() => setConfirmOpen(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+
             {selectedTraining && (
               <>
-                <View
-                  style={[
-                    styles.modalHeader,
-                    { backgroundColor: selectedTraining.color },
-                  ]}
-                >
-                  <Text style={styles.modalIcon}>{selectedTraining.icon}</Text>
-                  <Text style={styles.modalTitle}>{selectedTraining.name}</Text>
+                <View style={styles.sheetHeader}>
+                  <View style={[styles.sheetIconWrap, { backgroundColor: selectedTraining.color + "22" }]}>
+                    <Text style={styles.sheetIcon}>{selectedTraining.icon}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.sheetTitle}>{selectedTraining.name}</Text>
+                    <Text style={styles.sheetDesc}>{selectedTraining.description}</Text>
+                  </View>
                 </View>
 
-                <View style={styles.modalBody}>
-                  <Text style={styles.modalDescription}>
-                    {selectedTraining.description}
+                <View style={styles.sheetDivider} />
+
+                <Text style={styles.sheetLabel}>JOGADORES</Text>
+                <View style={styles.sheetPlayersWrap}>
+                  {selectedPlayers.map((id) => {
+                    const p = players.find((x) => x.id === id);
+                    if (!p) return null;
+                    return (
+                      <View key={id} style={styles.sheetPlayerRow}>
+                        <View style={styles.sheetPlayerAvatar}>
+                          <Text style={styles.sheetPlayerAvatarText}>{p.name[0]}</Text>
+                        </View>
+                        <Text style={styles.sheetPlayerName}>{p.name}</Text>
+                        <Text style={styles.sheetPlayerRole}>{p.role}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                <View style={styles.sheetDivider} />
+
+                <View style={styles.sheetSummaryRow}>
+                  <Text style={styles.sheetSummaryLabel}>Duração</Text>
+                  <Text style={styles.sheetSummaryValue}>{selectedTraining.duration}</Text>
+                </View>
+                <View style={styles.sheetSummaryRow}>
+                  <Text style={styles.sheetSummaryLabel}>Custo de energia</Text>
+                  <Text style={styles.sheetSummaryValue}>
+                    {selectedTraining.energyCost * selectedCount} EP
                   </Text>
+                </View>
+                <View style={styles.sheetSummaryRow}>
+                  <Text style={styles.sheetSummaryLabel}>Benefício</Text>
+                  <Text style={[styles.sheetSummaryValue, { color: selectedTraining.color }]}>
+                    {selectedTraining.benefit}
+                  </Text>
+                </View>
 
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>
-                      JOGADORES SELECIONADOS
-                    </Text>
-                    <View style={styles.modalPlayersList}>
-                      {selectedPlayers.map((playerId) => {
-                        const player = getPlayerById(playerId);
-                        return player ? (
-                          <View key={playerId} style={styles.modalPlayerItem}>
-                            <Text style={styles.modalPlayerName}>
-                              • {player.name}
-                            </Text>
-                            <Text style={styles.modalPlayerEnergy}>
-                              {player.energy}% →{" "}
-                              {player.energy - selectedTraining.energyCost}%
-                            </Text>
-                          </View>
-                        ) : null;
-                      })}
-                    </View>
-                  </View>
-
-                  <View style={styles.modalSection}>
-                    <Text style={styles.modalSectionTitle}>RESUMO</Text>
-                    <View style={styles.modalSummary}>
-                      <View style={styles.modalSummaryRow}>
-                        <Text style={styles.modalSummaryLabel}>Duração:</Text>
-                        <Text style={styles.modalSummaryValue}>
-                          {selectedTraining.duration} horas
-                        </Text>
-                      </View>
-                      <View style={styles.modalSummaryRow}>
-                        <Text style={styles.modalSummaryLabel}>
-                          Custo Total:
-                        </Text>
-                        <Text style={styles.modalSummaryValue}>
-                          {selectedTraining.energyCost * selectedPlayers.length}{" "}
-                          energia
-                        </Text>
-                      </View>
-                      <View style={styles.modalSummaryRow}>
-                        <Text style={styles.modalSummaryLabel}>Benefício:</Text>
-                        <Text
-                          style={[
-                            styles.modalSummaryValue,
-                            { color: selectedTraining.color },
-                          ]}
-                        >
-                          {selectedTraining.benefit}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonSecondary]}
-                      onPress={() => setShowConfirmModal(false)}
-                    >
-                      <Text style={styles.modalButtonTextSecondary}>
-                        CANCELAR
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[
-                        styles.modalButton,
-                        { backgroundColor: selectedTraining.color },
-                      ]}
-                      onPress={startTraining}
-                    >
-                      <Text style={styles.modalButtonText}>INICIAR TREINO</Text>
-                    </TouchableOpacity>
-                  </View>
+                <View style={styles.sheetActions}>
+                  <TouchableOpacity
+                    style={styles.btnCancel}
+                    onPress={() => setConfirmOpen(false)}
+                  >
+                    <Text style={styles.btnCancelText}>CANCELAR</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btnConfirm, { backgroundColor: selectedTraining.color }]}
+                    onPress={startTraining}
+                  >
+                    <Text style={styles.btnConfirmText}>INICIAR</Text>
+                  </TouchableOpacity>
                 </View>
               </>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── MODAL DE PROGRESSO / SUCESSO ─────────────── */}
+      <Modal visible={feedback !== "idle"} transparent animationType="fade">
+        <View style={styles.overlay}>
+          <View style={styles.feedbackCard}>
+            {feedback === "loading" ? (
+              <>
+                <LinearGradient
+                  colors={[selectedTraining?.color + "22" ?? "#10B98122", "#0D0D0D"]}
+                  style={styles.feedbackGradient}
+                >
+                  <Text style={styles.feedbackIcon}>{selectedTraining?.icon ?? "⚡"}</Text>
+                  <Text style={styles.feedbackTitle}>TREINAMENTO EM ANDAMENTO</Text>
+                  <Text style={styles.feedbackSub}>Aguarde enquanto seu time evolui...</Text>
+                  <ActivityIndicator size="large" color={selectedTraining?.color ?? "#10B981"} style={{ marginTop: 16 }} />
+                </LinearGradient>
+              </>
+            ) : (
+              <LinearGradient
+                colors={["#0D1F16", "#0D0D0D"]}
+                style={styles.feedbackGradient}
+              >
+                <Text style={styles.feedbackIcon}>🎉</Text>
+                <Text style={[styles.feedbackTitle, { color: "#10B981" }]}>TREINO CONCLUÍDO!</Text>
+                <Text style={styles.feedbackSub}>
+                  {selectedTraining?.benefit}
+                </Text>
+              </LinearGradient>
             )}
           </View>
         </View>
       </Modal>
-
-      {/* Training in Progress Modal */}
-      <Modal
-        visible={trainingInProgress}
-        animationType="fade"
-        transparent={true}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.progressModal}>
-            <LinearGradient
-              colors={["#10B981", "#059669"]}
-              style={styles.progressGradient}
-            >
-              <Text style={styles.progressIcon}>⚡</Text>
-              <Text style={styles.progressTitle}>TREINAMENTO EM ANDAMENTO</Text>
-              <Text style={styles.progressSubtitle}>
-                Aguarde enquanto seu time evolui...
-              </Text>
-
-              <View style={styles.progressBar}>
-                <View style={styles.progressFill} />
-              </View>
-            </LinearGradient>
-          </View>
-        </View>
-      </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safe: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: "#080808",
   },
 
   // Header
   header: {
-    padding: 24,
-    paddingTop: 60,
-    paddingBottom: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#161616",
+    borderWidth: 1,
+    borderColor: "#242424",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  backIcon: {
+    fontSize: 22,
+    color: "#FFFFFF",
+    lineHeight: 24,
+    marginTop: -2,
+  },
+  headerCenter: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  headerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
+    fontSize: 16,
+    fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: 2,
+    letterSpacing: 4,
   },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#D1FAE5",
-    marginTop: 4,
-  },
-  pointsCard: {
+  headerRight: {},
+  energyPill: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    padding: 16,
-    borderRadius: 8,
-    marginTop: 20,
-    gap: 12,
-  },
-  pointsIcon: {
-    fontSize: 32,
-  },
-  pointsValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-  },
-  pointsLabel: {
-    fontSize: 12,
-    color: "#D1FAE5",
-  },
-
-  // Content
-  content: {
-    flex: 1,
-  },
-
-  // Section
-  section: {
-    padding: 20,
-  },
-  sectionHeader: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#10B981",
-    letterSpacing: 2,
-  },
-  sectionAccent: {
-    width: 60,
-    height: 2,
-    backgroundColor: "#10B981",
-    marginTop: 4,
-  },
-
-  // Selection Buttons
-  selectionButtons: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  selectionButton: {
-    flex: 1,
-    backgroundColor: "#10B981",
-    padding: 12,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  selectionButtonSecondary: {
-    backgroundColor: "#0A0A0A",
+    gap: 5,
+    backgroundColor: "#161616",
     borderWidth: 1,
-    borderColor: "#1F1F1F",
+    borderColor: "#242424",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
-  selectionButtonText: {
+  energyPillIcon: { fontSize: 12 },
+  energyPillText: {
     fontSize: 12,
-    fontWeight: "bold",
-    color: "#000000",
-    letterSpacing: 1,
-  },
-  selectionButtonTextSecondary: {
-    color: "#6B7280",
-  },
-  selectedCount: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 16,
+    fontWeight: "700",
+    color: "#F59E0B",
   },
 
-  // Players Grid
-  playersGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-  },
-  playerCard: {
-    width: (width - 52) / 2,
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: "#1F1F1F",
-    position: "relative",
-  },
-  playerCardSelected: {
-    borderColor: "#10B981",
-    backgroundColor: "#10B98110",
-  },
-  playerCardDisabled: {
-    opacity: 0.5,
-  },
-  selectedBadge: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "#10B981",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  selectedBadgeText: {
-    color: "#000000",
-    fontSize: 14,
-    fontWeight: "bold",
-  },
-  playerCardName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    marginBottom: 4,
-  },
-  playerCardNameDisabled: {
-    color: "#6B7280",
-  },
-  playerCardRole: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 12,
-  },
-  energyContainer: {
-    gap: 4,
-  },
-  energyLabel: {
-    fontSize: 10,
-    color: "#10B981",
-    fontWeight: "bold",
-  },
-  energyLabelLow: {
-    color: "#EF4444",
-  },
-  energyBar: {
-    height: 6,
-    backgroundColor: "#1F1F1F",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  energyFill: {
-    height: "100%",
-    backgroundColor: "#10B981",
-  },
-  energyFillLow: {
-    backgroundColor: "#EF4444",
-  },
-  energyValue: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
-    textAlign: "right",
-  },
-  energyValueLow: {
-    color: "#EF4444",
-  },
-  disabledOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 8,
-  },
-  disabledText: {
-    color: "#EF4444",
-    fontSize: 12,
-    fontWeight: "bold",
+  container: {
+    flex: 1,
+    backgroundColor: "#080808",
   },
 
-  // Training Card
-  trainingCard: {
-    backgroundColor: "#0A0A0A",
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    position: "relative",
+  // Sections
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 8,
   },
-  trainingHeader: {
-    marginBottom: 12,
-  },
-  trainingInfo: {
+  sectionRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-  },
-  trainingIcon: {
-    fontSize: 36,
-  },
-  trainingName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-  },
-  trainingDescription: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
-  },
-  trainingStats: {
-    flexDirection: "row",
-    gap: 16,
+    justifyContent: "space-between",
     marginBottom: 12,
+    paddingVertical: 4,
   },
-  trainingStatItem: {
+  sectionRowActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  trainingStatIcon: {
-    fontSize: 16,
+  sectionTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B7280",
+    letterSpacing: 3,
   },
-  trainingStatText: {
+  sectionLink: {
     fontSize: 12,
-    color: "#D1D5DB",
+    color: "#10B981",
     fontWeight: "600",
   },
-  trainingBenefit: {
-    padding: 8,
-    borderRadius: 4,
+  sectionLinkSep: {
+    color: "#374151",
+    fontSize: 14,
   },
-  trainingBenefitText: {
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  trainingArrow: {
-    position: "absolute",
-    right: 16,
-    top: "50%",
-    marginTop: -12,
-  },
-  trainingArrowText: {
-    fontSize: 20,
-    color: "#1F1F1F",
+  sectionHint: {
+    fontSize: 11,
+    color: "#374151",
+    fontStyle: "italic",
   },
 
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
+  centered: {
+    paddingVertical: 28,
+    alignItems: "center",
+  },
+  emptyText: {
+    color: "#4B5563",
+    fontSize: 13,
+  },
+
+  // Selection bar
+  selectionBar: {
+    marginTop: 10,
+    backgroundColor: "#10B98118",
+    borderWidth: 1,
+    borderColor: "#10B98130",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    alignItems: "center",
+  },
+  selectionBarText: {
+    fontSize: 12,
+    color: "#10B981",
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+
+  // Players grid
+  playersGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  playerCard: {
+    width: (width - 42) / 3,
+    backgroundColor: "#0D0D0D",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1A1A1A",
+    padding: 12,
+    alignItems: "center",
+    gap: 4,
+    position: "relative",
+    overflow: "hidden",
+  },
+  playerCardSelected: {
+    borderColor: "#10B981",
+    backgroundColor: "#0D1F16",
+  },
+  playerCardDisabled: {
+    opacity: 0.45,
+  },
+  checkBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#10B981",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalContent: {
-    width: width - 40,
-    backgroundColor: "#000000",
-    borderRadius: 12,
-    overflow: "hidden",
+  checkBadgeText: {
+    fontSize: 10,
+    fontWeight: "900",
+    color: "#000",
+  },
+  playerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#1A1A1A",
     borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  modalHeader: {
-    padding: 24,
+    borderColor: "#2A2A2A",
+    justifyContent: "center",
     alignItems: "center",
+    marginBottom: 4,
   },
-  modalIcon: {
-    fontSize: 48,
-    marginBottom: 12,
+  playerAvatarText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#9CA3AF",
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
+  playerName: {
+    fontSize: 12,
+    fontWeight: "700",
     color: "#FFFFFF",
+    textAlign: "center",
+  },
+  playerRole: {
+    fontSize: 10,
+    color: "#6B7280",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
+  ratingLabel: {
+    fontSize: 9,
+    color: "#4B5563",
+    fontWeight: "600",
+  },
+  ratingValue: {
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  injuredOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  injuredText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#EF4444",
     letterSpacing: 1,
   },
-  modalBody: {
-    padding: 20,
+
+  // Training cards
+  trainingCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0D0D0D",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1A1A1A",
+    marginBottom: 10,
+    overflow: "hidden",
   },
-  modalDescription: {
-    fontSize: 14,
-    color: "#D1D5DB",
-    textAlign: "center",
-    marginBottom: 24,
+  trainingCardDisabled: {
+    opacity: 0.4,
   },
-  modalSection: {
+  trainingAccent: {
+    width: 3,
+    alignSelf: "stretch",
+  },
+  trainingLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+  },
+  trainingIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    flexShrink: 0,
+  },
+  trainingIcon: {
+    fontSize: 22,
+  },
+  trainingInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  trainingName: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  trainingDesc: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  benefitPill: {
+    alignSelf: "flex-start",
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    marginTop: 4,
+  },
+  benefitText: {
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  trainingRight: {
+    paddingRight: 14,
+    alignItems: "center",
+    gap: 6,
+  },
+  trainingMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  trainingMetaIcon: {
+    fontSize: 11,
+  },
+  trainingMetaValue: {
+    fontSize: 11,
+    color: "#9CA3AF",
+    fontWeight: "600",
+  },
+  trainingChevron: {
+    fontSize: 22,
+    color: "#374151",
+    marginTop: 4,
+  },
+
+  // Modal sheet
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: "#0D0D0D",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: "#1A1A1A",
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 32,
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#2A2A2A",
+    alignSelf: "center",
     marginBottom: 20,
   },
-  modalSectionTitle: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: "#10B981",
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 20,
+  },
+  sheetIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sheetIcon: { fontSize: 26 },
+  sheetTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#FFFFFF",
     letterSpacing: 1,
-    marginBottom: 12,
   },
-  modalPlayersList: {
-    backgroundColor: "#0A0A0A",
-    padding: 16,
-    borderRadius: 8,
-    gap: 8,
-  },
-  modalPlayerItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  modalPlayerName: {
-    fontSize: 14,
-    color: "#FFFFFF",
-  },
-  modalPlayerEnergy: {
+  sheetDesc: {
     fontSize: 12,
     color: "#6B7280",
+    marginTop: 2,
   },
-  modalSummary: {
-    backgroundColor: "#0A0A0A",
-    padding: 16,
+  sheetDivider: {
+    height: 1,
+    backgroundColor: "#1A1A1A",
+    marginBottom: 16,
+  },
+  sheetLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#6B7280",
+    letterSpacing: 3,
+    marginBottom: 10,
+  },
+  sheetPlayersWrap: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  sheetPlayerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#111",
     borderRadius: 8,
-    gap: 12,
+    padding: 10,
   },
-  modalSummaryRow: {
+  sheetPlayerAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#1A1A1A",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  sheetPlayerAvatarText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#9CA3AF",
+  },
+  sheetPlayerName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+  sheetPlayerRole: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+  sheetSummaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#111",
   },
-  modalSummaryLabel: {
-    fontSize: 14,
+  sheetSummaryLabel: {
+    fontSize: 13,
     color: "#6B7280",
   },
-  modalSummaryValue: {
-    fontSize: 14,
-    fontWeight: "bold",
+  sheetSummaryValue: {
+    fontSize: 13,
+    fontWeight: "700",
     color: "#FFFFFF",
   },
-  modalActions: {
+  sheetActions: {
     flexDirection: "row",
     gap: 12,
     marginTop: 20,
   },
-  modalButton: {
+  btnCancel: {
     flex: 1,
-    padding: 16,
-    borderRadius: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: "#161616",
+    borderWidth: 1,
+    borderColor: "#242424",
     alignItems: "center",
   },
-  modalButtonSecondary: {
-    backgroundColor: "#0A0A0A",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-  },
-  modalButtonText: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#000000",
+  btnCancelText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#6B7280",
     letterSpacing: 1,
   },
-  modalButtonTextSecondary: {
-    color: "#6B7280",
+  btnConfirm: {
+    flex: 2,
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  btnConfirmText: {
+    fontSize: 13,
+    fontWeight: "900",
+    color: "#000",
+    letterSpacing: 2,
   },
 
-  // Progress Modal
-  progressModal: {
-    width: width - 80,
-    borderRadius: 12,
+  // Feedback modal
+  feedbackCard: {
+    width: width - 48,
+    borderRadius: 16,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#1A1A1A",
   },
-  progressGradient: {
+  feedbackGradient: {
     padding: 32,
     alignItems: "center",
+    gap: 8,
   },
-  progressIcon: {
-    fontSize: 64,
-    marginBottom: 16,
-  },
-  progressTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#FFFFFF",
-    letterSpacing: 1,
+  feedbackIcon: {
+    fontSize: 52,
     marginBottom: 8,
   },
-  progressSubtitle: {
-    fontSize: 14,
-    color: "#D1FAE5",
-    marginBottom: 24,
+  feedbackTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    letterSpacing: 2,
+    textAlign: "center",
   },
-  progressBar: {
-    width: "100%",
-    height: 8,
-    backgroundColor: "rgba(0,0,0,0.3)",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  progressFill: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#FFFFFF",
+  feedbackSub: {
+    fontSize: 13,
+    color: "#9CA3AF",
+    textAlign: "center",
   },
 });
