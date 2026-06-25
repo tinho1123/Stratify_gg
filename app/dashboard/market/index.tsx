@@ -370,9 +370,8 @@ export default function MarketScreen() {
         })}
       </ScrollView>
 
-      {/* ── SORT ROW ───────────────────────────────────── */}
+      {/* ── SORT — segmented tabs ───────────────────────── */}
       <View style={styles.sortRow}>
-        <Text style={styles.sortLabel}>Ordenar:</Text>
         {SORTS.map((s) => (
           <TouchableOpacity
             key={s.key}
@@ -384,7 +383,6 @@ export default function MarketScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-        <Text style={styles.sortCount}>{filtered.length} leilões</Text>
       </View>
 
       {/* ── LIST ───────────────────────────────────────── */}
@@ -744,14 +742,14 @@ const styles = StyleSheet.create({
   },
   backIcon: { fontSize: 22, color: "#FFFFFF", lineHeight: 24, marginTop: -2 },
   headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
-  headerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#6366F1" },
+  headerDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#10B981" },
   headerTitle: { fontSize: 16, fontWeight: "900", color: "#FFFFFF", letterSpacing: 4 },
   budgetPill: {
-    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
-    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6, alignItems: "flex-end",
+    backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#242424",
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: "flex-end",
   },
-  budgetLabel: { fontSize: 9, color: "#6B7280", fontWeight: "700", letterSpacing: 1 },
-  budgetValue: { fontSize: 14, fontWeight: "900", color: "#10B981" },
+  budgetLabel: { fontSize: 8, color: "#6B7280", fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase" },
+  budgetValue: { fontSize: 13, fontWeight: "900", color: "#34D399" },
 
   // Search
   searchWrap: {
@@ -764,31 +762,32 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: "#FFFFFF", fontSize: 14 },
   searchClear: { fontSize: 13, color: "#4B5563", padding: 4 },
 
-  // Filters
+  // Role filter pills — emerald accent for active state (consistent per DS)
   filtersScroll: { marginBottom: 8 },
   filtersContent: { paddingHorizontal: 16, gap: 8 },
   filterPill: {
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20,
-    backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#1A1A1A",
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
   },
-  filterPillActive: { backgroundColor: "#6366F122", borderColor: "#6366F1" },
-  filterPillText: { fontSize: 11, fontWeight: "700", color: "#6B7280", letterSpacing: 0.5 },
-  filterPillTextActive: { color: "#6366F1" },
+  filterPillActive: { backgroundColor: "rgba(16,185,129,0.12)", borderColor: "rgba(16,185,129,0.30)" },
+  filterPillText: { fontSize: 11, fontWeight: "700", color: "#6B7280", letterSpacing: 0.5, textTransform: "uppercase" },
+  filterPillTextActive: { color: "#34D399" },
 
-  // Sort row
+  // Sort — segmented tabs style
   sortRow: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, marginBottom: 10, gap: 6,
+    marginHorizontal: 16, marginBottom: 10,
+    backgroundColor: "#111111", borderWidth: 1, borderColor: "#1A1A1A",
+    borderRadius: 10, padding: 4, gap: 2,
   },
   sortLabel: { fontSize: 11, color: "#4B5563", marginRight: 2 },
   sortBtn: {
-    paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 6, backgroundColor: "#0D0D0D",
-    borderWidth: 1, borderColor: "#1A1A1A",
+    flex: 1, paddingVertical: 7,
+    borderRadius: 7, alignItems: "center",
   },
-  sortBtnActive: { backgroundColor: "#1A1A2E", borderColor: "#6366F1" },
-  sortBtnText: { fontSize: 11, color: "#6B7280", fontWeight: "600" },
-  sortBtnTextActive: { color: "#6366F1" },
+  sortBtnActive: { backgroundColor: "#1F1F1F" },
+  sortBtnText: { fontSize: 12, color: "#6B7280", fontWeight: "600" },
+  sortBtnTextActive: { color: "#FFFFFF", fontWeight: "700" },
   sortCount: { flex: 1, textAlign: "right", fontSize: 11, color: "#374151" },
 
   // Empty state

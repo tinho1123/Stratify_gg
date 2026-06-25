@@ -47,7 +47,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StatusBar barStyle="light-content" backgroundColor="#0D0D0D" />
+      <StatusBar barStyle="light-content" backgroundColor="#080808" />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.keyboardView}
@@ -57,6 +57,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
+          {/* Radial glow */}
           <View style={styles.bgGlow} />
 
           {/* Header */}
@@ -72,6 +73,7 @@ export default function LoginScreen() {
 
           {/* Form */}
           <View style={styles.form}>
+            {/* E-mail */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>E-mail</Text>
               <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
@@ -89,6 +91,7 @@ export default function LoginScreen() {
               </View>
             </View>
 
+            {/* Senha */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Senha</Text>
               <View style={[styles.inputWrapper, passwordFocused && styles.inputFocused]}>
@@ -111,6 +114,7 @@ export default function LoginScreen() {
               </View>
             </View>
 
+            {/* Forgot */}
             <TouchableOpacity
               style={styles.forgotRow}
               onPress={() => router.push("/login/forgot-password")}
@@ -118,12 +122,14 @@ export default function LoginScreen() {
               <Text style={styles.forgotText}>Esqueceu a senha?</Text>
             </TouchableOpacity>
 
+            {/* Error */}
             {error && (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>⚠ {error}</Text>
               </View>
             )}
 
+            {/* CTA */}
             <TouchableOpacity
               style={[styles.loginButton, loading && styles.loginButtonDisabled]}
               onPress={handleLogin}
@@ -139,13 +145,13 @@ export default function LoginScreen() {
                 <Text style={styles.loginButtonText}>Entrar</Text>
               )}
             </TouchableOpacity>
-
           </View>
 
+          {/* Footer */}
           <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Novo por aqui? </Text>
+            <Text style={styles.signupText}>Não tem conta? </Text>
             <TouchableOpacity onPress={() => router.push("/login/signup")}>
-              <Text style={styles.signupLink}>Criar conta</Text>
+              <Text style={styles.signupLink}>Criar time</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -157,55 +163,58 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0D0D0D",
+    backgroundColor: "#080808",   // --surface-app
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 24,        // --space-8
     paddingVertical: 32,
     justifyContent: "center",
   },
+
+  // Glow
   bgGlow: {
     position: "absolute",
-    top: -120,
+    top: -100,
     alignSelf: "center",
-    width: 360,
-    height: 360,
-    borderRadius: 180,
-    backgroundColor: "#10B981",
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    backgroundColor: "#10B981",   // --emerald-500
     opacity: 0.07,
   },
+
+  // Header
   header: {
     alignItems: "center",
     marginBottom: 36,
   },
   logo: {
-    width: 72,
-    height: 72,
-    marginBottom: 16,
+    width: 84,
+    height: 84,
+    marginBottom: 14,
   },
   title: {
     fontSize: 26,
     fontWeight: "900",
     color: "#FFFFFF",
-    letterSpacing: 6,
-    marginBottom: 8,
+    letterSpacing: 8,             // --tracking-widest ≈ 0.32em
+    marginBottom: 10,
   },
   subtitle: {
     fontSize: 13,
-    color: "#6B7280",
+    fontWeight: "500",
+    color: "#6B7280",             // --text-muted
     letterSpacing: 0.3,
   },
+
+  // Form — flat, no card wrapper per design system
   form: {
-    backgroundColor: "#161616",
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#242424",
-    marginBottom: 24,
+    gap: 0,
+    marginBottom: 28,
   },
   inputGroup: {
     marginBottom: 16,
@@ -213,48 +222,54 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#9CA3AF",
+    color: "#9CA3AF",             // --text-secondary
     marginBottom: 8,
+    letterSpacing: 0.2,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0D0D0D",
-    borderRadius: 10,
+    backgroundColor: "#0D0D0D",  // --surface-deep
+    borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: "#2A2A2A",
+    borderColor: "#2A2A2A",      // --border-input
+    height: 42,                  // --control-h
   },
   inputFocused: {
-    borderColor: "#10B981",
+    borderColor: "#10B981",      // --focus-ring
   },
   input: {
     flex: 1,
     color: "#FFFFFF",
     fontSize: 15,
-    paddingVertical: 14,
     paddingHorizontal: 16,
   },
   eyeButton: {
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    height: "100%",
+    justifyContent: "center",
   },
   eyeButtonText: {
     fontSize: 17,
   },
+
   forgotRow: {
     alignSelf: "flex-end",
     marginBottom: 20,
-    marginTop: 2,
+    marginTop: -4,
+    minHeight: 44,               // --tap-min
+    justifyContent: "center",
   },
   forgotText: {
-    color: "#10B981",
+    color: "#10B981",            // --emerald-500
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "600",
   },
+
   errorBox: {
     backgroundColor: "rgba(239,68,68,0.1)",
     borderWidth: 1,
-    borderColor: "#EF4444",
+    borderColor: "#EF4444",      // --danger
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -263,39 +278,43 @@ const styles = StyleSheet.create({
     color: "#EF4444",
     fontSize: 13,
   },
+
   loginButton: {
-    backgroundColor: "#10B981",
-    paddingVertical: 15,
-    borderRadius: 10,
+    backgroundColor: "#10B981",  // --emerald-500
+    height: 48,                  // --button-h
+    borderRadius: 12,
     alignItems: "center",
-    marginBottom: 20,
+    justifyContent: "center",
   },
   loginButtonDisabled: {
     opacity: 0.5,
   },
   loginButtonText: {
-    color: "#000000",
+    color: "#000000",            // --accent-on
     fontSize: 15,
     fontWeight: "700",
-    letterSpacing: 0.3,
+    letterSpacing: 0.5,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
+
+  // Footer
   signupRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
   },
   signupText: {
-    color: "#6B7280",
-    fontSize: 14,
+    color: "#6B7280",            // --text-muted
+    fontSize: 13,
+    fontWeight: "500",
   },
   signupLink: {
-    color: "#10B981",
-    fontSize: 14,
-    fontWeight: "600",
+    color: "#10B981",            // --emerald-500
+    fontSize: 13,
+    fontWeight: "700",
   },
 });

@@ -17,6 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface Player {
   id: string;
   name: string;
@@ -44,29 +46,62 @@ interface Notification {
   created_at: string;
 }
 
+// ── Tokens ────────────────────────────────────────────────────────────────────
+
+const C = {
+  bg:            "#080808",
+  surfaceDeep:   "#0D0D0D",
+  surfaceRaised: "#111111",
+  surfaceControl:"#161616",
+  borderSubtle:  "#1A1A1A",
+  borderDefault: "#1F1F1F",
+  borderStrong:  "#242424",
+  emerald:       "#10B981",
+  emerald400:    "#34D399",
+  emeraldTint12: "rgba(16,185,129,0.12)",
+  emeraldTint30: "rgba(16,185,129,0.30)",
+  textPrimary:   "#FFFFFF",
+  textSecondary: "#9CA3AF",
+  textMuted:     "#6B7280",
+  textFaint:     "#4B5563",
+  textGhost:     "#374151",
+  danger:        "#EF4444",
+  warning:       "#F59E0B",
+  info:          "#6366F1",
+  pink:          "#EC4899",
+};
+
 const STATUS_COLOR: Record<string, string> = {
-  online: "#10B981",
-  injured: "#EF4444",
-  banned: "#F59E0B",
+  online:  C.emerald,
+  injured: C.danger,
+  banned:  C.warning,
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  online: "ONLINE",
+  online:  "ONLINE",
   injured: "LESÃO",
-  banned: "BANIDO",
+  banned:  "BANIDO",
 };
 
-const NEWS_COLORS: Record<string, { tag: string; border: string; bg: string }> = {
-  alert:   { tag: "#EF4444", border: "rgba(239,68,68,0.25)",   bg: "rgba(239,68,68,0.06)" },
-  info:    { tag: "#F59E0B", border: "rgba(245,158,11,0.25)",  bg: "rgba(245,158,11,0.06)" },
-  success: { tag: "#10B981", border: "rgba(16,185,129,0.25)",  bg: "rgba(16,185,129,0.06)" },
+const NOTIF_STYLE: Record<string, { tag: string; border: string; bg: string }> = {
+  alert:   { tag: C.danger,   border: "rgba(239,68,68,0.25)",   bg: "rgba(239,68,68,0.06)" },
+  info:    { tag: C.warning,  border: "rgba(245,158,11,0.25)",  bg: "rgba(245,158,11,0.06)" },
+  success: { tag: C.emerald,  border: "rgba(16,185,129,0.25)",  bg: "rgba(16,185,129,0.06)" },
 };
 
 function getRatingColor(r: number) {
-  if (r >= 90) return "#10B981";
-  if (r >= 75) return "#F59E0B";
-  return "#EF4444";
+  if (r >= 90) return C.emerald;
+  if (r >= 75) return C.warning;
+  return C.danger;
 }
+
+function fmtBudget(n: number) {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K`;
+  return `$${n}`;
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const [players, setPlayers] = useState<Player[]>([]);
@@ -111,10 +146,7 @@ export default function HomeScreen() {
     setNotifOpen(true);
     const unreadIds = notifications.filter((n) => !n.read).map((n) => n.id);
     if (unreadIds.length === 0) return;
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .in("id", unreadIds);
+    await supabase.from("notifications").update({ read: true }).in("id", unreadIds);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
@@ -122,50 +154,55 @@ export default function HomeScreen() {
     ? (players.reduce((s, p) => s + p.rating, 0) / players.length).toFixed(1)
     : "—";
 
+  const kpis = [
+    { value: team ? fmtBudget(team.budget) : "—",                                  label: "Orçamento", sub: "disponível" },
+    { value: team ? (team.ranking != null ? `#${team.ranking}` : "—") : "—",       label: "Ranking",   sub: team?.ranking != null ? "global" : "sem ranking" },
+    { value: team ? (team.fans >= 1000 ? `${(team.fans / 1000).toFixed(1)}K` : String(team.fans)) : "—", label: "Fãs", sub: "seguidores" },
+    { value: team ? `${team.wins}-${team.losses}` : "—",                           label: "Recorde",   sub: `${team ? team.wins + team.losses : 0} partidas` },
+  ];
+
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
-        {/* ── TOP HEADER ─────────────────────────────────── */}
+        {/* ── TOP HEADER ───────────────────────────────────── */}
         <View style={styles.topHeader}>
           <View style={styles.topHeaderLeft}>
             <View style={styles.logoDot} />
             <Text style={styles.logoText}>STRATIFY</Text>
           </View>
           <View style={styles.topHeaderRight}>
-            <TouchableOpacity style={styles.bellBtn} onPress={openNotifications}>
-              <Text style={styles.bellIcon}>🔔</Text>
+            <TouchableOpacity style={styles.iconBtn} onPress={openNotifications}>
+              <Text style={styles.iconBtnText}>🔔</Text>
               {unreadCount > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </Text>
+                <View style={styles.iconBadge}>
+                  <Text style={styles.iconBadgeText}>{unreadCount > 9 ? "9+" : unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.profileBtn}
+              style={styles.avatarBtn}
               onPress={() => router.push("/dashboard/profile")}
             >
-              <Text style={styles.profileBtnText}>GS</Text>
+              <Text style={styles.avatarBtnText}>GS</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── MODAL DE NOTIFICAÇÕES ───────────────────────── */}
+        {/* ── NOTIFICATIONS SHEET ──────────────────────────── */}
         <Modal
           visible={notifOpen}
           transparent
           animationType="slide"
           onRequestClose={() => setNotifOpen(false)}
         >
-          <Pressable style={styles.modalOverlay} onPress={() => setNotifOpen(false)}>
-            <Pressable style={styles.modalSheet} onPress={() => {}}>
-              <View style={styles.modalHandle} />
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>NOTIFICAÇÕES</Text>
+          <Pressable style={styles.overlay} onPress={() => setNotifOpen(false)}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <View style={styles.sheetHandle} />
+              <View style={styles.sheetHeader}>
+                <Text style={styles.sheetTitle}>NOTIFICAÇÕES</Text>
                 <TouchableOpacity onPress={() => setNotifOpen(false)}>
-                  <Text style={styles.modalClose}>✕</Text>
+                  <Text style={styles.sheetClose}>✕</Text>
                 </TouchableOpacity>
               </View>
 
@@ -177,7 +214,7 @@ export default function HomeScreen() {
                   </View>
                 ) : (
                   notifications.map((n) => {
-                    const c = NEWS_COLORS[n.type];
+                    const s = NOTIF_STYLE[n.type];
                     const date = new Date(n.created_at).toLocaleDateString("pt-BR", {
                       day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
                     });
@@ -186,18 +223,18 @@ export default function HomeScreen() {
                         key={n.id}
                         style={[
                           styles.notifItem,
-                          { borderColor: c.border, backgroundColor: n.read ? "#0D0D0D" : c.bg },
+                          { borderColor: s.border, backgroundColor: n.read ? C.surfaceDeep : s.bg },
                         ]}
                       >
-                        {!n.read && <View style={[styles.notifUnreadDot, { backgroundColor: c.tag }]} />}
+                        {!n.read && <View style={[styles.notifDot, { backgroundColor: s.tag }]} />}
                         <View style={styles.notifBody}>
                           <View style={styles.notifTopRow}>
-                            <View style={[styles.newsTag, { backgroundColor: c.tag }]}>
-                              <Text style={styles.newsTagText}>{n.tag}</Text>
+                            <View style={[styles.notifTag, { backgroundColor: s.tag }]}>
+                              <Text style={styles.notifTagText}>{n.tag}</Text>
                             </View>
                             <Text style={styles.notifDate}>{date}</Text>
                           </View>
-                          <Text style={[styles.newsMsg, n.read && { color: "#6B7280" }]}>
+                          <Text style={[styles.notifMsg, n.read && { color: C.textFaint }]}>
                             {n.message}
                           </Text>
                         </View>
@@ -211,12 +248,16 @@ export default function HomeScreen() {
           </Pressable>
         </Modal>
 
-        {/* ── HERO - PRÓXIMA PARTIDA ──────────────────────── */}
-        <View style={styles.heroWrapper}>
+        <View style={styles.content}>
+
+          {/* ── HERO — PRÓXIMA PARTIDA ──────────────────────── */}
           <LinearGradient
-            colors={["#0D1F16", "#111"]}
+            colors={["#0D1F16", "#111111"]}
             style={styles.heroCard}
           >
+            {/* Glow border overlay */}
+            <View style={styles.heroBorderGlow} pointerEvents="none" />
+
             <View style={styles.heroBadge}>
               <View style={styles.heroBadgeDot} />
               <Text style={styles.heroBadgeText}>PRÓXIMA PARTIDA</Text>
@@ -237,74 +278,51 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            <TouchableOpacity style={styles.heroBtn}>
-              <Text style={styles.heroBtnText}>VER DETALHES  →</Text>
+            <TouchableOpacity>
+              <Text style={styles.heroLink}>VER DETALHES  →</Text>
             </TouchableOpacity>
           </LinearGradient>
-          {/* Glow border */}
-          <View style={styles.heroGlowBorder} />
-        </View>
 
-        {/* ── KPI ROW ────────────────────────────────────── */}
-        <View style={styles.kpiRow}>
-          {[
-            {
-              value: team ? `$${(team.budget / 1000).toFixed(0)}K` : "—",
-              label: "Orçamento",
-              sub: "disponível",
-            },
-            {
-              value: team ? (team.ranking != null ? `#${team.ranking}` : "—") : "—",
-              label: "Ranking",
-              sub: team?.ranking != null ? "global" : "sem ranking",
-            },
-            {
-              value: team ? team.fans >= 1000 ? `${(team.fans / 1000).toFixed(1)}K` : String(team.fans) : "—",
-              label: "Fãs",
-              sub: "seguidores",
-            },
-            {
-              value: team ? `${team.wins}-${team.losses}` : "—",
-              label: "Recorde",
-              sub: `${team ? team.wins + team.losses : 0} partidas`,
-            },
-          ].map((kpi, i) => (
-            <View key={i} style={styles.kpiCard}>
-              <Text style={styles.kpiValue}>{kpi.value}</Text>
-              <Text style={styles.kpiLabel}>{kpi.label}</Text>
-              <Text style={styles.kpiSub}>{kpi.sub}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* ── TIME PRINCIPAL ─────────────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>TIME PRINCIPAL</Text>
-            <TouchableOpacity onPress={() => router.push("/dashboard/manage_team")}>
-              <Text style={styles.sectionLink}>gerenciar</Text>
-            </TouchableOpacity>
+          {/* ── KPI GRID 2×2 ─────────────────────────────────── */}
+          <View style={styles.kpiGrid}>
+            {kpis.map((kpi, i) => (
+              <View key={i} style={styles.kpiCard}>
+                <Text style={styles.kpiValue}>{kpi.value}</Text>
+                <Text style={styles.kpiLabel}>{kpi.label}</Text>
+                <Text style={styles.kpiSub}>{kpi.sub}</Text>
+              </View>
+            ))}
           </View>
 
-          <View style={styles.teamCard}>
+          {/* ── TIME PRINCIPAL ───────────────────────────────── */}
+          <View style={styles.card}>
+            {/* Section header */}
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionEyebrow}>TIME PRINCIPAL</Text>
+              <TouchableOpacity onPress={() => router.push("/dashboard/manage_team")}>
+                <Text style={styles.sectionAction}>gerenciar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Team name + avg rating */}
             <View style={styles.teamMeta}>
-              <Text style={styles.teamName}>{team?.name.toUpperCase() ?? "MEU TIME"}</Text>
-              <View style={styles.teamRatingBadge}>
-                <Text style={styles.teamRatingText}>{avgRating} AVG</Text>
+              <Text style={styles.teamName}>{team?.name?.toUpperCase() ?? "MEU TIME"}</Text>
+              <View style={styles.avgBadge}>
+                <Text style={styles.avgBadgeText}>{avgRating} AVG</Text>
               </View>
             </View>
 
             {loadingPlayers ? (
-              <View style={styles.playersLoading}>
-                <ActivityIndicator size="small" color="#10B981" />
+              <View style={styles.centered}>
+                <ActivityIndicator size="small" color={C.emerald} />
               </View>
             ) : players.length === 0 ? (
-              <View style={styles.playersEmpty}>
-                <Text style={styles.playersEmptyText}>Nenhum jogador ainda</Text>
+              <View style={styles.centered}>
+                <Text style={styles.emptyText}>Nenhum jogador ainda</Text>
               </View>
             ) : (
-              players.map((p) => (
-                <View key={p.id} style={styles.playerRow}>
+              players.map((p, i) => (
+                <View key={p.id} style={[styles.playerRow, i < players.length - 1 && styles.playerRowBorder]}>
                   <View style={styles.playerAvatar}>
                     <Text style={styles.playerAvatarText}>{p.name[0]}</Text>
                   </View>
@@ -312,7 +330,7 @@ export default function HomeScreen() {
                     <Text style={styles.playerName}>{p.name}</Text>
                     <Text style={styles.playerRole}>{p.role}</Text>
                   </View>
-                  <View style={[styles.statusPill, { borderColor: STATUS_COLOR[p.status] }]}>
+                  <View style={[styles.statusPill, { borderColor: STATUS_COLOR[p.status] + "88" }]}>
                     <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[p.status] }]} />
                     <Text style={[styles.statusText, { color: STATUS_COLOR[p.status] }]}>
                       {STATUS_LABEL[p.status]}
@@ -325,49 +343,43 @@ export default function HomeScreen() {
               ))
             )}
           </View>
-        </View>
 
-        {/* ── AÇÕES RÁPIDAS ──────────────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>AÇÕES RÁPIDAS</Text>
+          {/* ── AÇÕES RÁPIDAS ────────────────────────────────── */}
+          <View>
+            <Text style={styles.sectionEyebrow}>AÇÕES RÁPIDAS</Text>
+            <View style={styles.actionsGrid}>
+              {[
+                { icon: "🎯", label: "TREINAR",  sub: "Melhorar skills",     route: "/dashboard/training", accent: C.emerald },
+                { icon: "🏪", label: "MERCADO",  sub: "Contratar jogadores", route: "/dashboard/market",   accent: C.info },
+                { icon: "📋", label: "TÁTICAS",  sub: "Estratégias do time", route: "/dashboard/tactics",  accent: C.warning },
+                { icon: "🎮", label: "PARTIDAS", sub: "Ver calendário",      route: "/dashboard/matches",  accent: C.pink },
+              ].map((a, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.actionCard, { borderColor: a.accent + "44" }]}
+                  activeOpacity={0.75}
+                  onPress={() => router.push(a.route as any)}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: a.accent + "18" }]}>
+                    <Text style={styles.actionIcon}>{a.icon}</Text>
+                  </View>
+                  <Text style={[styles.actionLabel, { color: a.accent }]}>{a.label}</Text>
+                  <Text style={styles.actionSub}>{a.sub}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
-          <View style={styles.actionsGrid}>
+          {/* ── PERFORMANCE ──────────────────────────────────── */}
+          <View style={styles.card}>
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionEyebrow}>PERFORMANCE</Text>
+            </View>
             {[
-              { icon: "🎯", label: "TREINAR",  sub: "Melhorar skills",     route: "/dashboard/training",    accent: "#10B981" },
-              { icon: "🏪", label: "MERCADO",  sub: "Contratar jogadores",  route: "/dashboard/market",      accent: "#6366F1" },
-              { icon: "📋", label: "TÁTICAS",  sub: "Estratégias do time",  route: "/dashboard/tactics",     accent: "#F59E0B" },
-              { icon: "🎮", label: "PARTIDAS", sub: "Ver calendário",       route: "/dashboard/matches",     accent: "#EC4899" },
-            ].map((a, i) => (
-              <TouchableOpacity
-                key={i}
-                style={[styles.actionCard, { borderColor: a.accent + "33" }]}
-                activeOpacity={0.75}
-                onPress={() => a.route && router.push(a.route as any)}
-              >
-                <View style={[styles.actionIconWrap, { backgroundColor: a.accent + "18" }]}>
-                  <Text style={styles.actionIcon}>{a.icon}</Text>
-                </View>
-                <Text style={[styles.actionLabel, { color: a.accent }]}>{a.label}</Text>
-                <Text style={styles.actionSub}>{a.sub}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* ── PERFORMANCE ────────────────────────────────── */}
-        <View style={styles.section}>
-          <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>PERFORMANCE</Text>
-          </View>
-
-          <View style={styles.perfCard}>
-            {[
-              { label: "Moral",       value: 85, color: "#10B981" },
-              { label: "Forma",       value: 92, color: "#6366F1" },
-              { label: "Hype",        value: 78, color: "#F59E0B" },
-              { label: "Comunicação", value: 70, color: "#EC4899" },
+              { label: "Moral",       value: 85, color: C.emerald },
+              { label: "Forma",       value: 92, color: C.info },
+              { label: "Hype",        value: 78, color: C.warning },
+              { label: "Comunicação", value: 70, color: C.pink },
             ].map((m, i, arr) => (
               <View key={i} style={[styles.perfRow, i < arr.length - 1 && styles.perfRowBorder]}>
                 <Text style={styles.perfLabel}>{m.label}</Text>
@@ -378,6 +390,7 @@ export default function HomeScreen() {
               </View>
             ))}
           </View>
+
         </View>
 
         <View style={{ height: 32 }} />
@@ -386,23 +399,30 @@ export default function HomeScreen() {
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#080808",
+    backgroundColor: C.bg,
   },
   container: {
     flex: 1,
-    backgroundColor: "#080808",
+    backgroundColor: C.bg,
+  },
+  content: {
+    paddingHorizontal: 16,        // --gutter
+    gap: 18,
+    paddingTop: 4,
   },
 
-  // Top Header
+  // Top header
   topHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
   topHeaderLeft: {
     flexDirection: "row",
@@ -413,12 +433,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#10B981",
+    backgroundColor: C.emerald,
   },
   logoText: {
     fontSize: 18,
     fontWeight: "900",
-    color: "#FFFFFF",
+    color: C.textPrimary,
     letterSpacing: 5,
   },
   topHeaderRight: {
@@ -426,67 +446,67 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  bellBtn: {
+  iconBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#161616",
+    backgroundColor: C.surfaceControl,
     borderWidth: 1,
-    borderColor: "#242424",
+    borderColor: C.borderStrong,
     justifyContent: "center",
     alignItems: "center",
   },
-  bellIcon: {
+  iconBtnText: {
     fontSize: 16,
   },
-  bellBadge: {
+  iconBadge: {
     position: "absolute",
     top: -2,
     right: -2,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: "#EF4444",
+    backgroundColor: C.danger,
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 3,
   },
-  bellBadgeText: {
+  iconBadgeText: {
     fontSize: 9,
     fontWeight: "800",
     color: "#FFF",
   },
-  profileBtn: {
+  avatarBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#10B981",
+    backgroundColor: C.emerald,
     justifyContent: "center",
     alignItems: "center",
   },
-  profileBtnText: {
+  avatarBtnText: {
     fontSize: 12,
     fontWeight: "800",
     color: "#000",
   },
 
-  // Modal
-  modalOverlay: {
+  // Notification sheet
+  overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: "rgba(0,0,0,0.7)",
     justifyContent: "flex-end",
   },
-  modalSheet: {
-    backgroundColor: "#0D0D0D",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderColor: "#1A1A1A",
+  sheet: {
+    backgroundColor: C.surfaceDeep,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderColor: C.borderDefault,
     paddingHorizontal: 20,
     paddingTop: 12,
     maxHeight: "80%",
   },
-  modalHandle: {
+  sheetHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
@@ -494,21 +514,21 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 16,
   },
-  modalHeader: {
+  sheetHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  modalTitle: {
+  sheetTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: C.textPrimary,
     letterSpacing: 3,
   },
-  modalClose: {
+  sheetClose: {
     fontSize: 16,
-    color: "#6B7280",
+    color: C.textMuted,
     padding: 4,
   },
   notifEmpty: {
@@ -520,7 +540,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
   },
   notifEmptyText: {
-    color: "#4B5563",
+    color: C.textFaint,
     fontSize: 14,
   },
   notifItem: {
@@ -532,7 +552,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     gap: 10,
   },
-  notifUnreadDot: {
+  notifDot: {
     width: 7,
     height: 7,
     borderRadius: 3.5,
@@ -548,254 +568,234 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  notifDate: {
-    fontSize: 10,
-    color: "#4B5563",
-  },
-
-  // Hero
-  heroWrapper: {
-    marginHorizontal: 16,
-    marginBottom: 4,
-  },
-  heroCard: {
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#1A3D2A",
-  },
-  heroGlowBorder: {
-    position: "absolute",
-    inset: 0,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#10B98130",
-    pointerEvents: "none",
-  },
-  heroBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 10,
-  },
-  heroBadgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#10B981",
-  },
-  heroBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#10B981",
-    letterSpacing: 2,
-  },
-  heroTitle: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-  },
-  heroOpponent: {
-    fontSize: 15,
-    color: "#9CA3AF",
-    marginTop: 2,
-    marginBottom: 20,
-  },
-  countdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 20,
-  },
-  countdownSep: {
-    fontSize: 20,
-    color: "#374151",
-    fontWeight: "700",
-  },
-  countdownBox: {
-    alignItems: "center",
-    backgroundColor: "#0A0A0A",
-    borderWidth: 1,
-    borderColor: "#1F1F1F",
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    minWidth: 56,
-  },
-  countdownNum: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 1,
-  },
-  countdownLbl: {
-    fontSize: 9,
-    color: "#6B7280",
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  heroBtn: {
-    alignSelf: "flex-start",
-    backgroundColor: "#10B981",
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-  },
-  heroBtnText: {
-    color: "#000",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1,
-  },
-
-  // KPI Row
-  kpiRow: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 8,
-  },
-  kpiCard: {
-    flex: 1,
-    backgroundColor: "#111",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#1E1E1E",
-    padding: 10,
-    alignItems: "center",
-  },
-  kpiValue: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#10B981",
-  },
-  kpiLabel: {
-    fontSize: 10,
-    color: "#9CA3AF",
-    marginTop: 2,
-  },
-  kpiSub: {
-    fontSize: 9,
-    color: "#4B5563",
-    marginTop: 2,
-  },
-
-  // Sections
-  section: {
-    paddingHorizontal: 16,
-    marginBottom: 8,
-  },
-  sectionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-    paddingVertical: 4,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: "#6B7280",
-    letterSpacing: 3,
-  },
-  sectionLink: {
-    fontSize: 12,
-    color: "#10B981",
-    fontWeight: "600",
-  },
-
-  // News
-  newsCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    borderWidth: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    gap: 10,
-  },
-  newsTag: {
+  notifTag: {
     borderRadius: 4,
     paddingHorizontal: 7,
     paddingVertical: 3,
   },
-  newsTagText: {
+  notifTagText: {
     fontSize: 9,
     fontWeight: "800",
     color: "#000",
     letterSpacing: 0.5,
   },
-  newsMsg: {
-    flex: 1,
+  notifDate: {
+    fontSize: 10,
+    color: C.textFaint,
+  },
+  notifMsg: {
     color: "#D1D5DB",
     fontSize: 13,
   },
-  newsChevron: {
-    fontSize: 20,
-    color: "#374151",
+
+  // Hero
+  heroCard: {
+    borderRadius: 20,             // --radius-3xl
+    padding: 20,
+    borderWidth: 1,
+    borderColor: "#1A3D2A",
+  },
+  heroBorderGlow: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(16,185,129,0.18)",
+  },
+  heroBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 14,
+  },
+  heroBadgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: C.emerald,
+  },
+  heroBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.emerald400,
+    letterSpacing: 2.5,
+  },
+  heroTitle: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: C.textPrimary,
+    letterSpacing: 0.5,
+    lineHeight: 30,
+  },
+  heroOpponent: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: C.textSecondary,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+  countdown: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    marginBottom: 20,
+  },
+  countdownSep: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: C.textGhost,
+    marginBottom: 14,
+  },
+  countdownBox: {
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderWidth: 1,
+    borderColor: C.borderStrong,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 52,
+  },
+  countdownNum: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: C.textPrimary,
+    letterSpacing: 1,
+  },
+  countdownLbl: {
+    fontSize: 8,
+    fontWeight: "700",
+    color: C.textMuted,
+    letterSpacing: 1.5,
+    marginTop: 2,
+  },
+  heroLink: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: C.emerald400,
+    letterSpacing: 1.5,
   },
 
-  // Team
-  teamCard: {
-    backgroundColor: "#0D0D0D",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#1A1A1A",
-    overflow: "hidden",
+  // KPI grid 2×2
+  kpiGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
   },
-  teamMeta: {
+  kpiCard: {
+    width: (width - 42) / 2,     // 2 columns with 16px gutters + 10px gap
+    backgroundColor: C.surfaceDeep,
+    borderRadius: 16,            // --radius-2xl
+    borderWidth: 1,
+    borderColor: C.borderSubtle,
+    padding: 14,
+  },
+  kpiValue: {
+    fontSize: 24,                // --text-2xl, --font-mono weight
+    fontWeight: "900",
+    color: C.textPrimary,        // white per DS
+    lineHeight: 26,
+  },
+  kpiLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: C.textSecondary,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    marginTop: 6,
+  },
+  kpiSub: {
+    fontSize: 10,
+    fontWeight: "500",
+    color: C.textFaint,
+    marginTop: 2,
+  },
+
+  // Card
+  card: {
+    backgroundColor: C.surfaceDeep,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.borderSubtle,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+
+  // Section header
+  sectionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#1A1A1A",
+    marginBottom: 12,
+  },
+  sectionEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.textMuted,
+    letterSpacing: 3,
+    textTransform: "uppercase",
+  },
+  sectionAction: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: C.emerald,
+  },
+
+  // Team meta
+  teamMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
   },
   teamName: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 1,
+    fontSize: 16,
+    fontWeight: "900",
+    color: C.textPrimary,
+    letterSpacing: 0.5,
   },
-  teamRatingBadge: {
-    backgroundColor: "#10B98120",
+  avgBadge: {
+    backgroundColor: C.emeraldTint12,
     borderWidth: 1,
-    borderColor: "#10B98140",
-    borderRadius: 6,
+    borderColor: C.emeraldTint30,
+    borderRadius: 20,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
-  teamRatingText: {
-    fontSize: 11,
+  avgBadgeText: {
+    fontSize: 10,
     fontWeight: "700",
-    color: "#10B981",
+    color: C.emerald400,
   },
+
+  // Players
   playerRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#111",
     gap: 10,
+  },
+  playerRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: C.borderSubtle,
   },
   playerAvatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#1A1A1A",
+    backgroundColor: C.surfaceControl,
     borderWidth: 1,
-    borderColor: "#2A2A2A",
+    borderColor: C.borderStrong,
     justifyContent: "center",
     alignItems: "center",
   },
   playerAvatarText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#9CA3AF",
+    color: C.textSecondary,
   },
   playerInfo: {
     flex: 1,
@@ -803,11 +803,11 @@ const styles = StyleSheet.create({
   playerName: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#FFFFFF",
+    color: C.textPrimary,
   },
   playerRole: {
     fontSize: 11,
-    color: "#6B7280",
+    color: C.textMuted,
     marginTop: 1,
   },
   statusPill: {
@@ -830,42 +830,37 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   ratingBadge: {
-    width: 36,
-    height: 28,
     borderRadius: 6,
-    justifyContent: "center",
-    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   ratingText: {
     fontSize: 13,
     fontWeight: "800",
   },
-  playersLoading: {
-    paddingVertical: 24,
+
+  centered: {
+    paddingVertical: 20,
     alignItems: "center",
   },
-  playersEmpty: {
-    paddingVertical: 24,
-    alignItems: "center",
-  },
-  playersEmptyText: {
-    color: "#4B5563",
+  emptyText: {
+    color: C.textFaint,
     fontSize: 13,
   },
 
-  // Actions Grid
+  // Quick actions
   actionsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
+    marginTop: 12,
   },
   actionCard: {
     width: (width - 42) / 2,
-    backgroundColor: "#0D0D0D",
-    borderRadius: 14,
+    backgroundColor: C.surfaceDeep,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: 16,
-    alignItems: "flex-start",
+    padding: 14,
   },
   actionIconWrap: {
     width: 44,
@@ -876,47 +871,40 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   actionIcon: {
-    fontSize: 22,
+    fontSize: 20,
   },
   actionLabel: {
     fontSize: 13,
-    fontWeight: "800",
-    letterSpacing: 0.5,
+    fontWeight: "900",
+    letterSpacing: 0.8,
     marginBottom: 3,
   },
   actionSub: {
     fontSize: 11,
-    color: "#6B7280",
+    color: C.textFaint,
   },
 
   // Performance
-  perfCard: {
-    backgroundColor: "#0D0D0D",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#1A1A1A",
-    paddingHorizontal: 16,
-  },
   perfRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
+    paddingVertical: 13,
     gap: 12,
   },
   perfRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#111",
+    borderBottomColor: C.borderSubtle,
   },
   perfLabel: {
     width: 90,
     fontSize: 13,
-    color: "#9CA3AF",
     fontWeight: "500",
+    color: C.textSecondary,
   },
   perfBarTrack: {
     flex: 1,
     height: 4,
-    backgroundColor: "#1A1A1A",
+    backgroundColor: C.borderSubtle,
     borderRadius: 2,
     overflow: "hidden",
   },
