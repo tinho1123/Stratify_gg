@@ -1,0 +1,116 @@
+appId: com.anonymous.Stratify_gg
+---
+# Flow: Market — COMPRAR tab e VENDER tab
+# Pré-condição: usuário autenticado, migrations 015/016 aplicadas
+
+- launchApp:
+    clearState: false
+
+- waitForAnimationToEnd:
+    timeout: 6000
+
+# Navega para Market
+- tapOn:
+    text: "Mercado"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 8000
+
+# ── Tab COMPRAR ─────────────────────────────────────────────────────────────
+
+# 1. Cabeçalho carregou
+- assertVisible: "MERCADO"
+- assertVisible: "ORÇAMENTO"
+
+# 2. Tab COMPRAR está ativa por padrão
+- assertVisible: "COMPRAR"
+
+# 3. Filtros de tipo visíveis
+- assertVisible: "TODOS"
+- assertVisible: "LEILÃO"
+- assertVisible: "VENDA DIRETA"
+
+# 4. Aplica filtro LEILÃO
+- tapOn: "LEILÃO"
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# 5. Volta para TODOS
+- tapOn: "TODOS"
+
+# 6. Se houver listagem, abre detalhe de leilão
+- tapOn:
+    text: "DAR LANCE"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 4000
+
+# 7. Valida modal com stats do jogador
+- assertVisible:
+    text: "Rating"
+    optional: true
+- assertVisible:
+    text: "FAZER LANCE"
+    optional: true
+
+# 8. Fecha modal
+- pressKey: Back
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# 9. Testa busca
+- tapOn:
+    text: "Buscar jogador ou time..."
+    optional: true
+- inputText: "a"
+- waitForAnimationToEnd:
+    timeout: 2000
+
+# Limpa busca
+- clearText
+- pressKey: Back
+
+# ── Tab VENDER ──────────────────────────────────────────────────────────────
+
+# 10. Vai para aba Vender
+- tapOn: "VENDER"
+
+- waitForAnimationToEnd:
+    timeout: 4000
+
+# 11. Valida título da seção
+- assertVisible: "SELECIONE UM JOGADOR"
+
+# 12. Se tiver jogadores não listados, seleciona o primeiro
+- tapOn:
+    index: 0
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 3000
+
+# 13. Tela de configuração aparece
+- assertVisible:
+    text: "TIPO DE VENDA"
+    optional: true
+
+# 14. Seleciona venda direta
+- tapOn:
+    text: "VENDA DIRETA"
+    optional: true
+
+# 15. Preenche preço
+- tapOn:
+    text: "0"
+    optional: true
+- clearText
+- inputText: "50000"
+
+# 16. Cancela (não queremos realmente vender no flow E2E)
+- tapOn: "CANCELAR"
+    optional: true
+
+# 17. Volta para home
+- pressKey: Back

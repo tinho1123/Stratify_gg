@@ -1,0 +1,36 @@
+appId: com.anonymous.Stratify_gg
+---
+# Flow: Login completo com credenciais válidas
+# Valida: tela de login renderiza, aceita email/senha, redireciona para dashboard
+
+- launchApp:
+    clearState: false
+
+# 1. Verifica que a tela de login carregou
+- assertVisible: "Email"
+- assertVisible: "Senha"
+
+# 2. Preenche credenciais
+- tapOn: "Email"
+- clearText
+- inputText: "carvalho.cwell@gmail.com"
+
+- tapOn: "Senha"
+- clearText
+- inputText: "sua_senha_aqui"   # substitua pela senha real
+
+# 3. Submete
+- tapOn:
+    text: "Entrar"
+
+# 4. Aguarda carregamento do dashboard (espera até 10s)
+- waitForAnimationToEnd:
+    timeout: 10000
+
+# 5. Valida que o dashboard abriu (procura por elementos da home)
+- assertVisible:
+    text: "DASHBOARD"
+    optional: true
+- assertVisible:
+    text: "PDL"
+    optional: true

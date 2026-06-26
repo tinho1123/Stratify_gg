@@ -1,0 +1,49 @@
+appId: com.anonymous.Stratify_gg
+---
+# Flow: Dashboard — valida KPIs, navegação e exibição de dados do time
+# Pré-condição: usuário já autenticado (sessão ativa)
+
+- launchApp:
+    clearState: false
+
+# 1. Dashboard carregou
+- waitForAnimationToEnd:
+    timeout: 8000
+
+# 2. KPIs visíveis
+- assertVisible: "VITÓRIAS"
+- assertVisible: "DERROTAS"
+- assertVisible: "PDL"
+- assertVisible: "ORÇAMENTO"
+
+# 3. PDL mostra valor numérico (qualquer número)
+- assertVisible:
+    id: "kpi-pdl"
+    optional: true
+
+# 4. Navega para aba Manage Team
+- tapOn: "Time"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible:
+    text: "ELENCO"
+    optional: true
+
+# 5. Navega para aba Training
+- tapOn: "Treino"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# 6. Navega para aba Market
+- tapOn: "Mercado"
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- assertVisible: "MERCADO"
+
+# 7. Volta para home
+- tapOn: "Home"

@@ -35,6 +35,7 @@ interface Team {
   fans: number;
   wins: number;
   losses: number;
+  pdl: number;
 }
 
 interface Notification {
@@ -44,6 +45,13 @@ interface Notification {
   message: string;
   read: boolean;
   created_at: string;
+}
+
+interface NextMatch {
+  id: string;
+  opponent_name: string;
+  match_type: string;
+  scheduled_for: string;
 }
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -101,6 +109,36 @@ function fmtBudget(n: number) {
   return `$${n}`;
 }
 
+const DASH_TIERS = [
+  { name: "Bronze",      color: "#CD7F32", minPdl: 0    },
+  { name: "Prata",       color: "#C0C0C0", minPdl: 300  },
+  { name: "Ouro",        color: "#FFD700", minPdl: 600  },
+  { name: "Platina",     color: "#00B4D8", minPdl: 900  },
+  { name: "Diamante",    color: "#B9F2FF", minPdl: 1200 },
+  { name: "Mestre",      color: "#9B59B6", minPdl: 1500 },
+  { name: "Grão-Mestre", color: "#E74C3C", minPdl: 1800 },
+] as const;
+
+function getDashTierInfo(pdl: number): { label: string; color: string } {
+  const clamped = Math.max(0, pdl);
+  let tier: typeof DASH_TIERS[number] = DASH_TIERS[0];
+  for (const t of DASH_TIERS) { if (clamped >= t.minPdl) tier = t; }
+  const isSingle = tier.minPdl >= 1500;
+  if (isSingle) return { label: tier.name, color: tier.color };
+  const divIdx = Math.min(2, Math.floor((clamped - tier.minPdl) / 100));
+  const div    = ["III", "II", "I"][divIdx];
+  return { label: `${tier.name} ${div}`, color: tier.color };
+}
+
+function calcCountdown(scheduledFor: string) {
+  const diff = new Date(scheduledFor).getTime() - Date.now();
+  if (diff <= 0) return [{ v: 0, l: "DIAS" }, { v: 0, l: "HRS" }, { v: 0, l: "MIN" }];
+  const days = Math.floor(diff / 86_400_000);
+  const hrs  = Math.floor((diff % 86_400_000) / 3_600_000);
+  const mins = Math.floor((diff % 3_600_000) / 60_000);
+  return [{ v: days, l: "DIAS" }, { v: hrs, l: "HRS" }, { v: mins, l: "MIN" }];
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
@@ -109,17 +147,20 @@ export default function HomeScreen() {
   const [team, setTeam] = useState<Team | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
+  const [, setTick] = useState(0);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     supabase
       .from("teams")
-      .select("id, name, budget, ranking, fans, wins, losses")
+      .select("id, name, budget, ranking, fans, wins, losses, pdl")
       .single()
       .then(({ data, error }) => {
         if (!error && data) {
-          setTeam(data as Team);
+          const d = data as any;
+          setTeam({ ...d, pdl: d.pdl ?? 0 } as Team);
           supabase
             .from("players")
             .select("id, name, role, status, rating")
@@ -140,6 +181,21 @@ export default function HomeScreen() {
       .then(({ data, error }) => {
         if (!error && data) setNotifications(data as Notification[]);
       });
+
+    supabase
+      .from("matches")
+      .select("id, opponent_name, match_type, scheduled_for")
+      .eq("status", "scheduled")
+      .gte("scheduled_for", new Date().toISOString())
+      .order("scheduled_for", { ascending: true })
+      .limit(1)
+      .single()
+      .then(({ data, error }) => {
+        if (!error && data) setNextMatch(data as NextMatch);
+      });
+
+    const timer = setInterval(() => setTick((t) => t + 1), 60_000);
+    return () => clearInterval(timer);
   }, []);
 
   const openNotifications = async () => {
@@ -154,9 +210,12 @@ export default function HomeScreen() {
     ? (players.reduce((s, p) => s + p.rating, 0) / players.length).toFixed(1)
     : "—";
 
+  const teamPdl  = team?.pdl ?? 0;
+  const tierInfo = getDashTierInfo(teamPdl);
+
   const kpis = [
     { value: team ? fmtBudget(team.budget) : "—",                                  label: "Orçamento", sub: "disponível" },
-    { value: team ? (team.ranking != null ? `#${team.ranking}` : "—") : "—",       label: "Ranking",   sub: team?.ranking != null ? "global" : "sem ranking" },
+    { value: team ? `${teamPdl}` : "—",                                             label: "PDL",       sub: tierInfo.label, subColor: tierInfo.color },
     { value: team ? (team.fans >= 1000 ? `${(team.fans / 1000).toFixed(1)}K` : String(team.fans)) : "—", label: "Fãs", sub: "seguidores" },
     { value: team ? `${team.wins}-${team.losses}` : "—",                           label: "Recorde",   sub: `${team ? team.wins + team.losses : 0} partidas` },
   ];
@@ -255,7 +314,6 @@ export default function HomeScreen() {
             colors={["#0D1F16", "#111111"]}
             style={styles.heroCard}
           >
-            {/* Glow border overlay */}
             <View style={styles.heroBorderGlow} pointerEvents="none" />
 
             <View style={styles.heroBadge}>
@@ -263,24 +321,37 @@ export default function HomeScreen() {
               <Text style={styles.heroBadgeText}>PRÓXIMA PARTIDA</Text>
             </View>
 
-            <Text style={styles.heroTitle}>FINAL DO TORNEIO</Text>
-            <Text style={styles.heroOpponent}>vs. Team Liquid</Text>
+            {nextMatch ? (
+              <>
+                <Text style={styles.heroTitle}>
+                  {nextMatch.match_type?.toUpperCase() ?? "PARTIDA"}
+                </Text>
+                <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
 
-            <View style={styles.countdown}>
-              {[{ v: 2, l: "DIAS" }, { v: 14, l: "HRS" }, { v: 32, l: "MIN" }].map((item, i) => (
-                <React.Fragment key={i}>
-                  {i > 0 && <Text style={styles.countdownSep}>:</Text>}
-                  <View style={styles.countdownBox}>
-                    <Text style={styles.countdownNum}>{String(item.v).padStart(2, "0")}</Text>
-                    <Text style={styles.countdownLbl}>{item.l}</Text>
-                  </View>
-                </React.Fragment>
-              ))}
-            </View>
+                <View style={styles.countdown}>
+                  {calcCountdown(nextMatch.scheduled_for).map((item, i) => (
+                    <React.Fragment key={i}>
+                      {i > 0 && <Text style={styles.countdownSep}>:</Text>}
+                      <View style={styles.countdownBox}>
+                        <Text style={styles.countdownNum}>{String(item.v).padStart(2, "0")}</Text>
+                        <Text style={styles.countdownLbl}>{item.l}</Text>
+                      </View>
+                    </React.Fragment>
+                  ))}
+                </View>
 
-            <TouchableOpacity>
-              <Text style={styles.heroLink}>VER DETALHES  →</Text>
-            </TouchableOpacity>
+                <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
+                  <Text style={styles.heroLink}>VER DETALHES  →</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.heroEmpty}>
+                <Text style={styles.heroEmptyText}>Nenhuma partida agendada</Text>
+                <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
+                  <Text style={styles.heroLink}>AGENDAR PARTIDA  →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </LinearGradient>
 
           {/* ── KPI GRID 2×2 ─────────────────────────────────── */}
@@ -289,7 +360,9 @@ export default function HomeScreen() {
               <View key={i} style={styles.kpiCard}>
                 <Text style={styles.kpiValue}>{kpi.value}</Text>
                 <Text style={styles.kpiLabel}>{kpi.label}</Text>
-                <Text style={styles.kpiSub}>{kpi.sub}</Text>
+                <Text style={[styles.kpiSub, (kpi as any).subColor ? { color: (kpi as any).subColor } : undefined]}>
+                  {kpi.sub}
+                </Text>
               </View>
             ))}
           </View>
@@ -677,6 +750,14 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: C.emerald400,
     letterSpacing: 1.5,
+  },
+  heroEmpty: {
+    gap: 14,
+    paddingVertical: 8,
+  },
+  heroEmptyText: {
+    fontSize: 14,
+    color: C.textMuted,
   },
 
   // KPI grid 2×2
