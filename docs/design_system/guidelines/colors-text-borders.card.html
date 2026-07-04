@@ -1,0 +1,32 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Text & borders" subtitle="Five-step text ramp on dark; subtle 1px border ladder" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:18px; background:var(--surface-app); display:flex; gap:28px; }
+  .col { flex:1; }
+  .txt { font:var(--weight-bold) 15px var(--font-sans); margin-bottom:7px; display:flex; justify-content:space-between; align-items:baseline; }
+  .txt .h { font:var(--weight-medium) 10px var(--font-mono); }
+  .brow { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .bbox { width:80px; height:26px; border-radius:var(--radius-md); background:var(--surface-deep); }
+  .blab { font:var(--weight-semibold) 11px var(--font-sans); color:var(--text-secondary); }
+</style>
+</head>
+<body>
+  <div class="col">
+    <div class="txt" style="color:var(--text-primary)">Primary<span class="h" style="color:var(--text-faint)">#FFFFFF</span></div>
+    <div class="txt" style="color:var(--text-secondary)">Secondary<span class="h" style="color:var(--text-faint)">#9CA3AF</span></div>
+    <div class="txt" style="color:var(--text-muted)">Muted<span class="h" style="color:var(--text-faint)">#6B7280</span></div>
+    <div class="txt" style="color:var(--text-faint)">Faint<span class="h" style="color:var(--text-ghost)">#4B5563</span></div>
+    <div class="txt" style="color:var(--text-ghost)">Ghost<span class="h" style="color:var(--text-ghost)">#374151</span></div>
+  </div>
+  <div class="col">
+    <div class="brow"><div class="bbox" style="border:1px solid var(--border-subtle)"></div><span class="blab">subtle · #1A1A1A</span></div>
+    <div class="brow"><div class="bbox" style="border:1px solid var(--border-default)"></div><span class="blab">default · #1F1F1F</span></div>
+    <div class="brow"><div class="bbox" style="border:1px solid var(--border-strong)"></div><span class="blab">strong · #242424</span></div>
+    <div class="brow"><div class="bbox" style="border:1px solid var(--border-input)"></div><span class="blab">input · #2A2A2A</span></div>
+  </div>
+</body>
+</html>

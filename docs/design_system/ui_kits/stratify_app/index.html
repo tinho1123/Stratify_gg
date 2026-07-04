@@ -1,0 +1,95 @@
+<!-- @dsCard group="Stratify App" viewport="430x760" name="Stratify — mobile app" subtitle="Login → dashboard → transfer market, interactive" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stratify — App UI Kit</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  @keyframes stratify-spin { to { transform: rotate(360deg); } }
+  @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  html, body { height: 100%; }
+  body { margin: 0; background: #050505 radial-gradient(circle at 50% 0%, #0e1a14 0%, #050505 60%); display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  /* phone frame */
+  .device { width: 390px; height: 760px; border-radius: 44px; background: #000; border: 1px solid #1f1f1f; box-shadow: 0 40px 100px rgba(0,0,0,0.7), inset 0 0 0 6px #0a0a0a; padding: 10px; position: relative; }
+  .screen { width: 100%; height: 100%; border-radius: 34px; overflow: hidden; background: var(--surface-app); position: relative; }
+  .scroll { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+  .scroll::-webkit-scrollbar { width: 0; }
+  /* status bar */
+  .statusbar { position: absolute; top: 0; left: 0; right: 0; height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font: var(--weight-bold) 12px var(--font-sans); color: #fff; z-index: 30; pointer-events: none; }
+  .notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 110px; height: 26px; background: #000; border-radius: 16px; z-index: 31; }
+  .content-pad { padding-top: 30px; min-height: 100%; }
+  .reset-btn { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 50; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="LoginScreen.jsx"></script>
+<script type="text/babel" src="DashboardScreen.jsx"></script>
+<script type="text/babel" src="MarketScreen.jsx"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+function NotifSheet({ onClose }) {
+  const { Badge } = window.StratifyDesignSystem_af4c64;
+  const tones = { success: 'emerald', alert: 'danger', info: 'warning' };
+  return (
+    <div onClick={onClose} style={{ position:'absolute', inset:0, background:'var(--surface-overlay)', display:'flex', alignItems:'flex-end', zIndex:20 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxHeight:'70%', background:'var(--surface-deep)', borderTopLeftRadius:'var(--radius-sheet)', borderTopRightRadius:'var(--radius-sheet)', borderTop:'1px solid var(--border-strong)', boxShadow:'var(--shadow-sheet)', padding:'14px 18px 24px', animation:'sheet-up 0.32s var(--ease-standard)', overflowY:'auto' }}>
+        <div style={{ width:36, height:4, borderRadius:2, background:'var(--border-input)', margin:'0 auto 16px' }} />
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+          <span style={{ font:'var(--weight-black) 14px var(--font-sans)', letterSpacing:'0.1em', color:'#fff' }}>NOTIFICAÇÕES</span>
+          <span onClick={onClose} style={{ color:'var(--text-muted)', fontSize:16, cursor:'pointer' }}>✕</span>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          {window.STRATIFY_DATA.notifications.map(n => (
+            <div key={n.id} style={{ position:'relative', background:n.read?'var(--surface-app)':'var(--surface-raised)', border:'1px solid var(--border-subtle)', borderRadius:'var(--radius-xl)', padding:'12px 14px' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:6 }}>
+                <Badge tone={tones[n.type]} size="sm">{n.tag}</Badge>
+                <span style={{ font:'var(--weight-medium) 10px var(--font-mono)', color:'var(--text-faint)' }}>{n.date}</span>
+              </div>
+              <div style={{ font:'var(--weight-medium) 13px var(--font-sans)', color:n.read?'var(--text-muted)':'var(--text-secondary)', lineHeight:1.4 }}>{n.message}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [screen, setScreen] = useState('login'); // login | dashboard | market
+  const [notifs, setNotifs] = useState(false);
+  const [unread, setUnread] = useState(2);
+  const scrollRef = React.useRef(null);
+  const go = (s) => { setScreen(s); if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+
+  return (
+    <>
+      <div className="device">
+        <div className="notch"></div>
+        <div className="screen">
+          <div className="statusbar"><span>9:41</span><span>5G  100%</span></div>
+          <div className="scroll" ref={scrollRef}>
+            <div className="content-pad">
+              {screen === 'login' && <window.LoginScreen onLogin={() => go('dashboard')} />}
+              {screen === 'dashboard' && <window.DashboardScreen onNavigate={go} onOpenNotifs={() => { setNotifs(true); setUnread(0); }} unread={unread} />}
+              {screen === 'market' && <window.MarketScreen onBack={() => go('dashboard')} />}
+            </div>
+          </div>
+          {notifs && <NotifSheet onClose={() => setNotifs(false)} />}
+        </div>
+      </div>
+    </>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

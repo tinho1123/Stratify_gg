@@ -1,0 +1,28 @@
+/* ===========================================================================
+   Stratify — Spacing & sizing tokens
+   The app lays out on a 4px base; screen gutter is 16px, cards pad 14–24px.
+   =========================================================================== */
+
+:root {
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 10px;
+  --space-4: 12px;
+  --space-5: 14px;
+  --space-6: 16px;   /* screen gutter, card padding */
+  --space-7: 20px;
+  --space-8: 24px;   /* hero / sheet padding */
+  --space-10: 32px;
+  --space-12: 40px;
+
+  /* component sizing */
+  --gutter: 16px;           /* horizontal screen padding */
+  --control-h: 42px;        /* inputs, search bars */
+  --button-h: 48px;         /* primary CTA height */
+  --icon-chip: 44px;        /* square icon wells */
+  --avatar-sm: 28px;
+  --avatar-md: 36px;
+  --avatar-lg: 56px;
+  --tap-min: 44px;          /* minimum hit target */
+}

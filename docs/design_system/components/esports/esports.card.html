@@ -1,0 +1,55 @@
+<!-- @dsCard group="Components" viewport="700x300" name="Esports — Player, rating, stats, KPI" subtitle="PlayerListItem rows, RatingBadge tiers, StatBar, KpiTile" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin:0; padding:22px; background:var(--surface-app); }
+  @keyframes stratify-spin { to { transform: rotate(360deg); } }
+  .wrap { display:grid; grid-template-columns:1.3fr 1fr; gap:16px; align-items:start; }
+  .col { display:flex; flex-direction:column; gap:10px; }
+  .lab { font:800 9px var(--font-sans); letter-spacing:0.1em; text-transform:uppercase; color:var(--text-ghost); }
+  .row { display:flex; gap:10px; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+  const { PlayerListItem, RatingBadge, StatBar, KpiTile, Button } = window.StratifyDesignSystem_af4c64;
+  function Demo() {
+    return (
+      <div className="wrap">
+        <div className="col">
+          <span className="lab">Player rows</span>
+          <PlayerListItem name="Gabriel 'FalleN' Toledo" role="IGL · AWPer" rating={91} status="online" statusLabel="Online" onClick={()=>{}} />
+          <PlayerListItem name="Lucas 'Rez' Lima" role="Rifler" status="injured" statusLabel="Lesionado" rating={78} onClick={()=>{}} />
+          <PlayerListItem name="João Silva" role="Entry" meta="$1.8M" rating={74} trailing={<Button size="sm">Contratar</Button>} />
+          <div className="row">
+            <RatingBadge value={94} size="lg" />
+            <RatingBadge value={83} size="lg" />
+            <RatingBadge value={72} size="lg" />
+            <RatingBadge value={61} size="lg" />
+          </div>
+        </div>
+        <div className="col">
+          <span className="lab">Attributes</span>
+          <StatBar label="Mira" value={92} tone="emerald" />
+          <StatBar label="Game Sense" value={78} tone="purple" />
+          <StatBar label="Awareness" value={64} tone="blue" />
+          <div className="row" style={{marginTop:4}}>
+            <div style={{flex:1}}><KpiTile icon="🏆" value="12º" label="Ranking" tone="warning" delta="+3" /></div>
+            <div style={{flex:1}}><KpiTile icon="💰" value="$8.4M" label="Orçamento" delta="-2%" /></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script>
+</body>
+</html>

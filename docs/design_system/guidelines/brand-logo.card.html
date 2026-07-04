@@ -1,0 +1,29 @@
+<!-- @dsCard group="Brand" viewport="700x240" name="Logo & crest" subtitle="Crimson shield, paired headset players, flame — on navy plate" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../styles.css">
+<style>
+  body { margin:0; padding:24px; background:var(--surface-app); display:flex; align-items:center; gap:28px; }
+  .plate { background:var(--brand-navy); border-radius:var(--radius-3xl); border:1px solid var(--border-strong); padding:18px 26px; display:flex; align-items:center; gap:18px; }
+  .lockup { display:flex; align-items:center; gap:12px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--emerald-500); }
+  .wm { font:900 26px var(--font-display); letter-spacing:0.34em; color:#fff; }
+  .swatch { display:flex; flex-direction:column; gap:6px; }
+  .chip { width:120px; height:26px; border-radius:var(--radius-sm); display:flex; align-items:center; padding:0 10px; font:700 10px var(--font-mono); color:#fff; }
+</style>
+</head>
+<body>
+  <img src="../assets/stratify-crest.png" alt="Stratify crest" style="height:150px;">
+  <div style="display:flex; flex-direction:column; gap:16px;">
+    <div class="plate"><img src="../assets/stratify-logo.png" style="height:54px;" alt="logo"></div>
+    <div class="lockup"><span class="dot"></span><span class="wm">STRATIFY</span></div>
+  </div>
+  <div class="swatch">
+    <div class="chip" style="background:var(--brand-crimson)">crimson #C8202E</div>
+    <div class="chip" style="background:var(--brand-navy); border:1px solid var(--border-strong)">navy #0E1420</div>
+    <div class="chip" style="background:var(--emerald-500); color:#000">emerald #10B981</div>
+  </div>
+</body>
+</html>

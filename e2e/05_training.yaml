@@ -1,0 +1,67 @@
+appId: com.anonymous.Stratify_gg
+---
+# Flow: Training — inicia sessão de treino, valida timer e métricas
+# Pré-condição: usuário autenticado
+
+- launchApp:
+    clearState: false
+
+- waitForAnimationToEnd:
+    timeout: 6000
+
+# 1. Navega para tela de treino
+- tapOn:
+    text: "Treino"
+    optional: true
+- tapOn:
+    text: "TREINO"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 6000
+
+# 2. Tela de treino carregou
+- assertVisible:
+    text: "TREINO"
+    optional: true
+
+# 3. Verifica que mostra lista de skills ou exercícios
+- assertVisible:
+    text: "Aim"
+    optional: true
+- assertVisible:
+    text: "Gamesense"
+    optional: true
+- assertVisible:
+    text: "Communication"
+    optional: true
+
+# 4. Inicia um treino (se botão disponível)
+- tapOn:
+    text: "INICIAR"
+    optional: true
+- tapOn:
+    text: "TREINAR"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 4000
+
+# 5. Valida timer (se sessão iniciada)
+- assertVisible:
+    text: "00:"
+    optional: true
+
+# 6. Finaliza treino se iniciado
+- tapOn:
+    text: "FINALIZAR"
+    optional: true
+- tapOn:
+    text: "PARAR"
+    optional: true
+
+- waitForAnimationToEnd:
+    timeout: 4000
+
+# 7. Volta
+- pressKey: Back

@@ -1,0 +1,37 @@
+/* ===========================================================================
+   Stratify — base reset & element defaults.
+   Keep minimal: most styling lives on components. This sets the dark canvas,
+   default type, selection color, and tabular numerals for stats.
+   =========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--emerald-tint-30);
+  color: #fff;
+}
+
+/* tabular figures everywhere numbers matter */
+.stat, .tabular { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+
+/* shared utility: section eyebrow label */
+.eyebrow {
+  font: var(--eyebrow);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+a { color: var(--emerald-500); text-decoration: none; }

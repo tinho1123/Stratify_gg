@@ -1,0 +1,64 @@
+/* ===========================================================================
+   Stratify — Color tokens
+   Dark-only esports UI. Near-black surfaces, emerald product accent,
+   crimson brand-mark heritage, multi-hue role/status palette.
+   =========================================================================== */
+
+:root {
+  /* ---- Brand mark (logo crest) ---------------------------------------- */
+  --brand-crimson:      #C8202E;   /* shield + flame */
+  --brand-crimson-deep: #8E1620;
+  --brand-navy:         #0E1420;   /* logo plate background */
+
+  /* ---- Product accent (the app's working primary) --------------------- */
+  --emerald-500: #10B981;   /* primary accent — buttons, focus, brand dot */
+  --emerald-400: #34D399;
+  --emerald-600: #059669;
+  --emerald-tint-08: rgba(16,185,129,0.08);
+  --emerald-tint-12: rgba(16,185,129,0.12);
+  --emerald-tint-20: rgba(16,185,129,0.20);
+  --emerald-tint-30: rgba(16,185,129,0.30);
+
+  /* ---- Surfaces (darkest -> raised) ----------------------------------- */
+  --surface-app:    #080808;   /* root screen background */
+  --surface-deep:   #0D0D0D;   /* cards, sheets, inputs */
+  --surface-raised: #111111;   /* nested cards, stat tiles */
+  --surface-control:#161616;   /* buttons, pills, icon chips */
+  --surface-hover:  #1A1A1A;   /* hover / avatar wells */
+
+  /* ---- Borders & dividers --------------------------------------------- */
+  --border-subtle:  #1A1A1A;   /* card & divider default */
+  --border-default: #1F1F1F;
+  --border-strong:  #242424;   /* controls, inputs */
+  --border-input:   #2A2A2A;   /* resting input outline */
+
+  /* ---- Text ----------------------------------------------------------- */
+  --text-primary:  #FFFFFF;
+  --text-secondary:#9CA3AF;
+  --text-muted:    #6B7280;
+  --text-faint:    #4B5563;   /* sub-labels, captions */
+  --text-ghost:    #374151;   /* separators, chevrons, ranks */
+
+  /* ---- Semantic & role hues ------------------------------------------- */
+  --danger:  #EF4444;   /* injury, alert, destructive */
+  --warning: #F59E0B;   /* suspension, energy, info-warn */
+  --info:    #6366F1;   /* market, secondary actions */
+  --accent-pink:   #EC4899;  /* matches, AWPer */
+  --accent-blue:   #3B82F6;  /* awareness attrs */
+  --accent-purple: #8B5CF6;  /* game-sense attrs, IGL */
+  --success: var(--emerald-500);
+
+  /* tinted fills (12% over dark) used for icon chips / badges */
+  --danger-tint:  rgba(239,68,68,0.12);
+  --warning-tint: rgba(245,158,11,0.12);
+  --info-tint:    rgba(99,102,241,0.12);
+  --pink-tint:    rgba(236,72,153,0.12);
+
+  /* ---- Semantic aliases ----------------------------------------------- */
+  --bg:              var(--surface-app);
+  --surface-card:    var(--surface-deep);
+  --surface-overlay: rgba(0,0,0,0.7);   /* modal scrim */
+  --accent:          var(--emerald-500);
+  --accent-on:       #000000;           /* text on emerald buttons */
+  --focus-ring:      var(--emerald-500);
+}
