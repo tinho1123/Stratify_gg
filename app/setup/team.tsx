@@ -47,16 +47,14 @@ export default function SetupTeamScreen() {
       return;
     }
 
-    const { data: teamData, error: upsertError } = await supabase
+    const { data: teamData, error: updateError } = await supabase
       .from("teams")
-      .upsert(
-        { user_id: user.id, name, onboarded: true },
-        { onConflict: "user_id" }
-      )
+      .update({ name, onboarded: true })
+      .eq("user_id", user.id)
       .select("id")
       .single();
 
-    if (upsertError || !teamData) {
+    if (updateError || !teamData) {
       setError(t("setup.errSaveGeneric"));
       setLoading(false);
       return;
