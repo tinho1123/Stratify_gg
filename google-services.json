@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "804020263654",
+    "project_id": "stratify-ff196",
+    "storage_bucket": "stratify-ff196.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:804020263654:android:6250a1f0edfc606494b927",
+        "android_client_info": {
+          "package_name": "com.anonymous.Stratify_gg"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBIK8lMbZdXehoaLFab3ytFce_ndgyZQx4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

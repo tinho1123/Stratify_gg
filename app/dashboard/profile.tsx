@@ -1,8 +1,11 @@
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { LANGUAGE_LABELS, Language } from "@/i18n/translations";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,7 +14,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+const DISCORD_URL = "https://discord.gg/rb8FfsSzu";
+
 export default function ProfileScreen() {
+  const { language, setLanguage, t } = useLanguage();
   const [email, setEmail] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,11 +28,11 @@ export default function ProfileScreen() {
       setEmail(user?.email ?? null);
       if (user?.created_at) {
         const date = new Date(user.created_at);
-        setCreatedAt(date.toLocaleDateString("pt-BR"));
+        setCreatedAt(date.toLocaleDateString(language === "pt" ? "pt-BR" : "en-US"));
       }
       setLoading(false);
     });
-  }, []);
+  }, [language]);
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -50,9 +56,9 @@ export default function ProfileScreen() {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backText}>← Voltar</Text>
+            <Text style={styles.backText}>← {t("common.back")}</Text>
           </TouchableOpacity>
-          <Text style={styles.title}>MINHA CONTA</Text>
+          <Text style={styles.title}>{t("profile.title")}</Text>
           <View style={styles.headerSpacer} />
         </View>
 
@@ -63,37 +69,75 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.emailDisplay}>{email}</Text>
           {createdAt && (
-            <Text style={styles.memberSince}>Membro desde {createdAt}</Text>
+            <Text style={styles.memberSince}>{t("profile.memberSince")} {createdAt}</Text>
           )}
         </View>
 
         {/* Info Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>INFORMAÇÕES DA CONTA</Text>
+          <Text style={styles.sectionTitle}>{t("profile.accountInfoSection")}</Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>E-mail</Text>
+              <Text style={styles.infoLabel}>{t("profile.email")}</Text>
               <Text style={styles.infoValue}>{email}</Text>
             </View>
             <View style={[styles.infoRow, styles.infoRowLast]}>
-              <Text style={styles.infoLabel}>Senha</Text>
+              <Text style={styles.infoLabel}>{t("profile.password")}</Text>
               <Text style={styles.infoValue}>••••••••</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Settings Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.settingsSection")}</Text>
+          <View style={styles.infoCard}>
+            <View style={[styles.infoRow, styles.infoRowLast, { flexDirection: "column", alignItems: "stretch", gap: 10 }]}>
+              <Text style={styles.infoLabel}>{t("profile.language")}</Text>
+              <View style={styles.languageRow}>
+                {(Object.keys(LANGUAGE_LABELS) as Language[]).map((lang) => (
+                  <TouchableOpacity
+                    key={lang}
+                    style={[styles.languageOption, language === lang && styles.languageOptionActive]}
+                    onPress={() => setLanguage(lang)}
+                  >
+                    <Text style={[styles.languageOptionText, language === lang && styles.languageOptionTextActive]}>
+                      {LANGUAGE_LABELS[lang]}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         </View>
 
         {/* Security Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>SEGURANÇA</Text>
+          <Text style={styles.sectionTitle}>{t("profile.securitySection")}</Text>
           <View style={styles.securityCard}>
             <Text style={styles.securityIcon}>🔒</Text>
             <View style={styles.securityContent}>
-              <Text style={styles.securityTitle}>Senha criptografada</Text>
-              <Text style={styles.securityDesc}>
-                Sua senha é armazenada com hash bcrypt — nunca em texto puro. Nem nós temos acesso a ela.
-              </Text>
+              <Text style={styles.securityTitle}>{t("profile.securityTitle")}</Text>
+              <Text style={styles.securityDesc}>{t("profile.securityDesc")}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Community Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.communitySection")}</Text>
+          <TouchableOpacity
+            style={styles.discordCard}
+            onPress={() => Linking.openURL(DISCORD_URL)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.discordIcon}>💬</Text>
+            <View style={styles.discordContent}>
+              <Text style={styles.discordTitle}>{t("profile.discordTitle")}</Text>
+              <Text style={styles.discordDesc}>{t("profile.discordDesc")}</Text>
+            </View>
+            <Text style={styles.discordArrow}>→</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Logout */}
@@ -106,7 +150,7 @@ export default function ProfileScreen() {
           {loggingOut ? (
             <ActivityIndicator size="small" color="#EF4444" />
           ) : (
-            <Text style={styles.logoutText}>SAIR DA CONTA</Text>
+            <Text style={styles.logoutText}>{t("profile.logout")}</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -218,6 +262,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "500",
   },
+  languageRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  languageOption: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#242424",
+    backgroundColor: "#0D0D0D",
+    alignItems: "center",
+  },
+  languageOptionActive: {
+    borderColor: "#10B981",
+    backgroundColor: "rgba(16,185,129,0.12)",
+  },
+  languageOptionText: {
+    color: "#6B7280",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  languageOptionTextActive: {
+    color: "#10B981",
+  },
   securityCard: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -244,6 +313,38 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 13,
     lineHeight: 18,
+  },
+  discordCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(88,101,242,0.1)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#5865F2",
+    padding: 16,
+    gap: 12,
+  },
+  discordIcon: {
+    fontSize: 24,
+  },
+  discordContent: {
+    flex: 1,
+  },
+  discordTitle: {
+    color: "#5865F2",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  discordDesc: {
+    color: "#6B7280",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  discordArrow: {
+    color: "#5865F2",
+    fontSize: 18,
+    fontWeight: "700",
   },
   logoutButton: {
     backgroundColor: "rgba(239,68,68,0.1)",

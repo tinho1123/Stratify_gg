@@ -8,7 +8,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.Stratify_gg"
     },
     "android": {
       "adaptiveIcon": {
@@ -16,7 +17,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.Stratify_gg"
+      "package": "com.anonymous.Stratify_gg",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "output": "static"
@@ -34,11 +36,33 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      "expo-localization",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "Usamos esse identificador para mostrar anúncios mais relevantes e medir o desempenho das campanhas. Seus dados de jogo continuam privados."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "91761390-296f-4d29-8cd2-2fca8838a5fc"
+      }
     }
   }
 }

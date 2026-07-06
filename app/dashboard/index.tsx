@@ -1,7 +1,12 @@
+import { useAppAlert } from "@/components/ui/AppAlert";
+import { getRatingColor, STATUS_COLOR, STATUS_LABEL_KEY } from "@/constants/playerStatus";
 import { supabase } from "@/database/supabase";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -25,6 +30,9 @@ interface Player {
   role: string;
   status: "online" | "injured" | "banned";
   rating: number;
+  morale: number;
+  form: number;
+  energy: number;
 }
 
 interface Team {
@@ -36,6 +44,9 @@ interface Team {
   wins: number;
   losses: number;
   pdl: number;
+  premium_credits: number;
+  login_streak_count: number;
+  last_login_reward_at: string | null;
 }
 
 interface Notification {
@@ -45,6 +56,7 @@ interface Notification {
   message: string;
   read: boolean;
   created_at: string;
+  related_id: string | null;
 }
 
 interface NextMatch {
@@ -79,29 +91,11 @@ const C = {
   pink:          "#EC4899",
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  online:  C.emerald,
-  injured: C.danger,
-  banned:  C.warning,
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  online:  "ONLINE",
-  injured: "LESÃO",
-  banned:  "BANIDO",
-};
-
 const NOTIF_STYLE: Record<string, { tag: string; border: string; bg: string }> = {
   alert:   { tag: C.danger,   border: "rgba(239,68,68,0.25)",   bg: "rgba(239,68,68,0.06)" },
   info:    { tag: C.warning,  border: "rgba(245,158,11,0.25)",  bg: "rgba(245,158,11,0.06)" },
   success: { tag: C.emerald,  border: "rgba(16,185,129,0.25)",  bg: "rgba(16,185,129,0.06)" },
 };
-
-function getRatingColor(r: number) {
-  if (r >= 90) return C.emerald;
-  if (r >= 75) return C.warning;
-  return C.danger;
-}
 
 function fmtBudget(n: number) {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -132,16 +126,23 @@ function getDashTierInfo(pdl: number): { label: string; color: string } {
 
 function calcCountdown(scheduledFor: string) {
   const diff = new Date(scheduledFor).getTime() - Date.now();
-  if (diff <= 0) return [{ v: 0, l: "DIAS" }, { v: 0, l: "HRS" }, { v: 0, l: "MIN" }];
+  if (diff <= 0) return [{ v: 0, key: "dashboard.unitDays" }, { v: 0, key: "dashboard.unitHours" }, { v: 0, key: "dashboard.unitMinutes" }];
   const days = Math.floor(diff / 86_400_000);
   const hrs  = Math.floor((diff % 86_400_000) / 3_600_000);
   const mins = Math.floor((diff % 3_600_000) / 60_000);
-  return [{ v: days, l: "DIAS" }, { v: hrs, l: "HRS" }, { v: mins, l: "MIN" }];
+  return [
+    { v: days, key: "dashboard.unitDays" },
+    { v: hrs,  key: "dashboard.unitHours" },
+    { v: mins, key: "dashboard.unitMinutes" },
+  ];
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const { t } = useLanguage();
+  const { isEnabled } = useFeatureFlags();
+  const { alert } = useAppAlert();
   const [players, setPlayers] = useState<Player[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [team, setTeam] = useState<Team | null>(null);
@@ -149,38 +150,65 @@ export default function HomeScreen() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [, setTick] = useState(0);
+  const [claimingDaily, setClaimingDaily] = useState(false);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  useEffect(() => {
-    supabase
-      .from("teams")
-      .select("id, name, budget, ranking, fans, wins, losses, pdl")
-      .single()
-      .then(({ data, error }) => {
-        if (!error && data) {
-          const d = data as any;
-          setTeam({ ...d, pdl: d.pdl ?? 0 } as Team);
-          supabase
-            .from("players")
-            .select("id, name, role, status, rating")
-            .eq("team_id", data.id)
-            .then(({ data: pd, error: pe }) => {
-              if (!pe && pd) setPlayers(pd as Player[]);
-              setLoadingPlayers(false);
-            });
-        } else {
-          setLoadingPlayers(false);
-        }
-      });
+  const loadNotifications = useCallback(() => {
+    // Checa se alguma partida agendada já passou do horário e, se sim, gera a notificação
+    // "pronta pra assistir" (idempotente — não duplica se já foi gerada).
+    supabase.rpc("check_ready_matches").then(() => {
+      supabase
+        .from("notifications")
+        .select("id, type, tag, message, read, created_at, related_id")
+        .order("created_at", { ascending: false })
+        .then(({ data, error }) => {
+          if (!error && data) setNotifications(data as Notification[]);
+        });
+    });
+  }, []);
 
-    supabase
-      .from("notifications")
-      .select("id, type, tag, message, read, created_at")
-      .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data) setNotifications(data as Notification[]);
-      });
+  const loadDashboard = useCallback(() => {
+    setLoadingPlayers(true);
+    // Manutenção sob demanda antes de carregar o time: remove jogadores com contrato vencido
+    // e paga bônus de temporadas de liga já encerradas — ambos alteram budget/fans, por isso
+    // rodam antes do fetch do time (senão a tela mostraria valores desatualizados).
+    Promise.all([
+      supabase.rpc("check_expired_contracts"),
+      supabase.rpc("check_expiring_contracts"),
+      supabase.rpc("check_recovered_players"),
+      supabase.rpc("claim_season_rewards"),
+      supabase.rpc("check_achievements"),
+    ]).then(() => {
+      supabase
+        .from("teams")
+        .select("id, name, budget, ranking, fans, wins, losses, pdl, premium_credits, login_streak_count, last_login_reward_at")
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const d = data as any;
+            setTeam({
+              ...d,
+              pdl: d.pdl ?? 0,
+              premium_credits: d.premium_credits ?? 0,
+              login_streak_count: d.login_streak_count ?? 0,
+              last_login_reward_at: d.last_login_reward_at ?? null,
+            } as Team);
+            supabase
+              .from("players")
+              .select("id, name, role, status, rating, morale, form, energy")
+              .eq("team_id", data.id)
+              .then(({ data: pd, error: pe }) => {
+                if (!pe && pd) setPlayers(pd as Player[]);
+                setLoadingPlayers(false);
+              });
+          } else {
+            setLoadingPlayers(false);
+          }
+        });
+    });
+
+    loadNotifications();
 
     supabase
       .from("matches")
@@ -193,10 +221,20 @@ export default function HomeScreen() {
       .then(({ data, error }) => {
         if (!error && data) setNextMatch(data as NextMatch);
       });
+  }, [loadNotifications]);
 
-    const timer = setInterval(() => setTick((t) => t + 1), 60_000);
+  // Recarrega sempre que a tela ganha foco — cobre a volta de Gerenciar Time/Mercado/etc.,
+  // que mudam budget/elenco/notificações enquanto o Dashboard ficava montado em segundo
+  // plano (o Stack não desmonta a tela de baixo ao empilhar outra por cima).
+  useFocusEffect(useCallback(() => { loadDashboard(); }, [loadDashboard]));
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+      loadNotifications();
+    }, 60_000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadNotifications]);
 
   const openNotifications = async () => {
     setNotifOpen(true);
@@ -206,18 +244,43 @@ export default function HomeScreen() {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  const openNotification = (n: Notification) => {
+    if (!n.related_id) return;
+    setNotifOpen(false);
+    router.push("/dashboard/matches");
+  };
+
+  const claimDailyReward = async () => {
+    setClaimingDaily(true);
+    const { data, error } = await supabase.rpc("claim_daily_reward");
+    setClaimingDaily(false);
+    if (error) {
+      alert(t("common.error"), t("dashboard.dailyRewardErrGeneric"));
+      return;
+    }
+    const credits = (data as any)?.credits_granted ?? 0;
+    alert(t("dashboard.dailyRewardClaimedTitle"), t("dashboard.dailyRewardClaimedMsg").replace("{n}", String(credits)), "success");
+    loadDashboard();
+  };
+
   const avgRating = players.length
     ? (players.reduce((s, p) => s + p.rating, 0) / players.length).toFixed(1)
     : "—";
+
+  const avgOf = (fn: (p: Player) => number) =>
+    players.length ? Math.round(players.reduce((s, p) => s + fn(p), 0) / players.length) : 0;
+  const avgMorale = avgOf((p) => p.morale);
+  const avgForm   = avgOf((p) => p.form);
+  const avgEnergy = avgOf((p) => p.energy);
 
   const teamPdl  = team?.pdl ?? 0;
   const tierInfo = getDashTierInfo(teamPdl);
 
   const kpis = [
-    { value: team ? fmtBudget(team.budget) : "—",                                  label: "Orçamento", sub: "disponível" },
-    { value: team ? `${teamPdl}` : "—",                                             label: "PDL",       sub: tierInfo.label, subColor: tierInfo.color },
-    { value: team ? (team.fans >= 1000 ? `${(team.fans / 1000).toFixed(1)}K` : String(team.fans)) : "—", label: "Fãs", sub: "seguidores" },
-    { value: team ? `${team.wins}-${team.losses}` : "—",                           label: "Recorde",   sub: `${team ? team.wins + team.losses : 0} partidas` },
+    { value: team ? fmtBudget(team.budget) : "—",                                  label: t("dashboard.budget"), sub: t("dashboard.budgetSub") },
+    { value: team ? `${teamPdl}` : "—",                                             label: "PDL",                 sub: tierInfo.label, subColor: tierInfo.color },
+    { value: team ? (team.fans >= 1000 ? `${(team.fans / 1000).toFixed(1)}K` : String(team.fans)) : "—", label: t("dashboard.fans"), sub: t("dashboard.fansSub") },
+    { value: team ? `${team.wins}-${team.losses}` : "—",                           label: t("dashboard.record"), sub: `${team ? team.wins + team.losses : 0} ${t("dashboard.recordSub")}` },
   ];
 
   return (
@@ -231,6 +294,10 @@ export default function HomeScreen() {
             <Text style={styles.logoText}>STRATIFY</Text>
           </View>
           <View style={styles.topHeaderRight}>
+            <TouchableOpacity style={styles.storeBtn} onPress={() => router.push("/dashboard/store" as any)}>
+              <Text style={styles.storeBtnIcon}>💎</Text>
+              <Text style={styles.storeBtnText}>{team ? team.premium_credits.toLocaleString() : "—"}</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.iconBtn} onPress={openNotifications}>
               <Text style={styles.iconBtnText}>🔔</Text>
               {unreadCount > 0 && (
@@ -259,7 +326,7 @@ export default function HomeScreen() {
             <Pressable style={styles.sheet} onPress={() => {}}>
               <View style={styles.sheetHandle} />
               <View style={styles.sheetHeader}>
-                <Text style={styles.sheetTitle}>NOTIFICAÇÕES</Text>
+                <Text style={styles.sheetTitle}>{t("dashboard.notifications")}</Text>
                 <TouchableOpacity onPress={() => setNotifOpen(false)}>
                   <Text style={styles.sheetClose}>✕</Text>
                 </TouchableOpacity>
@@ -269,7 +336,7 @@ export default function HomeScreen() {
                 {notifications.length === 0 ? (
                   <View style={styles.notifEmpty}>
                     <Text style={styles.notifEmptyIcon}>🔕</Text>
-                    <Text style={styles.notifEmptyText}>Nenhuma notificação</Text>
+                    <Text style={styles.notifEmptyText}>{t("dashboard.noNotifications")}</Text>
                   </View>
                 ) : (
                   notifications.map((n) => {
@@ -278,8 +345,10 @@ export default function HomeScreen() {
                       day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit",
                     });
                     return (
-                      <View
+                      <TouchableOpacity
                         key={n.id}
+                        activeOpacity={n.related_id ? 0.7 : 1}
+                        onPress={() => openNotification(n)}
                         style={[
                           styles.notifItem,
                           { borderColor: s.border, backgroundColor: n.read ? C.surfaceDeep : s.bg },
@@ -297,7 +366,7 @@ export default function HomeScreen() {
                             {n.message}
                           </Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })
                 )}
@@ -318,7 +387,7 @@ export default function HomeScreen() {
 
             <View style={styles.heroBadge}>
               <View style={styles.heroBadgeDot} />
-              <Text style={styles.heroBadgeText}>PRÓXIMA PARTIDA</Text>
+              <Text style={styles.heroBadgeText}>{t("dashboard.nextMatch")}</Text>
             </View>
 
             {nextMatch ? (
@@ -334,21 +403,21 @@ export default function HomeScreen() {
                       {i > 0 && <Text style={styles.countdownSep}>:</Text>}
                       <View style={styles.countdownBox}>
                         <Text style={styles.countdownNum}>{String(item.v).padStart(2, "0")}</Text>
-                        <Text style={styles.countdownLbl}>{item.l}</Text>
+                        <Text style={styles.countdownLbl}>{t(item.key)}</Text>
                       </View>
                     </React.Fragment>
                   ))}
                 </View>
 
                 <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
-                  <Text style={styles.heroLink}>VER DETALHES  →</Text>
+                  <Text style={styles.heroLink}>{t("dashboard.viewDetails")}</Text>
                 </TouchableOpacity>
               </>
             ) : (
               <View style={styles.heroEmpty}>
-                <Text style={styles.heroEmptyText}>Nenhuma partida agendada</Text>
+                <Text style={styles.heroEmptyText}>{t("dashboard.noMatchScheduled")}</Text>
                 <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
-                  <Text style={styles.heroLink}>AGENDAR PARTIDA  →</Text>
+                  <Text style={styles.heroLink}>{t("dashboard.scheduleMatch")}</Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -367,13 +436,62 @@ export default function HomeScreen() {
             ))}
           </View>
 
+          {/* ── RECOMPENSA DIÁRIA ────────────────────────────── */}
+          {team && (() => {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const claimedToday = team.last_login_reward_at === todayStr;
+            const yesterdayStr = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+            const predictedStreak = claimedToday
+              ? team.login_streak_count
+              : team.last_login_reward_at === yesterdayStr
+              ? team.login_streak_count + 1
+              : 1;
+            const dayInCycle = ((predictedStreak - 1) % 7) + 1;
+            return (
+              <View style={styles.dailyCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dailyTitle}>{t("dashboard.dailyRewardTitle")}</Text>
+                  <View style={styles.dailyDotsRow}>
+                    {Array.from({ length: 7 }, (_, i) => i + 1).map((day) => {
+                      const filled = day < dayInCycle || (day === dayInCycle && claimedToday);
+                      const isToday = day === dayInCycle && !claimedToday;
+                      return (
+                        <View
+                          key={day}
+                          style={[
+                            styles.dailyDot,
+                            filled && styles.dailyDotFilled,
+                            isToday && styles.dailyDotToday,
+                          ]}
+                        />
+                      );
+                    })}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[styles.dailyBtn, claimedToday && styles.dailyBtnDone]}
+                  onPress={claimDailyReward}
+                  disabled={claimedToday || claimingDaily}
+                >
+                  {claimingDaily ? (
+                    <ActivityIndicator size="small" color="#F59E0B" />
+                  ) : (
+                    <Text style={styles.dailyBtnText}>
+                      {claimedToday ? t("dashboard.dailyRewardClaimedLabel") : t("dashboard.dailyRewardClaimBtn")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+
           {/* ── TIME PRINCIPAL ───────────────────────────────── */}
           <View style={styles.card}>
             {/* Section header */}
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionEyebrow}>TIME PRINCIPAL</Text>
+              <Text style={styles.sectionEyebrow}>{t("dashboard.mainTeam")}</Text>
               <TouchableOpacity onPress={() => router.push("/dashboard/manage_team")}>
-                <Text style={styles.sectionAction}>gerenciar</Text>
+                <Text style={styles.sectionAction}>{t("dashboard.manage")}</Text>
               </TouchableOpacity>
             </View>
 
@@ -391,7 +509,7 @@ export default function HomeScreen() {
               </View>
             ) : players.length === 0 ? (
               <View style={styles.centered}>
-                <Text style={styles.emptyText}>Nenhum jogador ainda</Text>
+                <Text style={styles.emptyText}>{t("dashboard.noPlayers")}</Text>
               </View>
             ) : (
               players.map((p, i) => (
@@ -406,7 +524,7 @@ export default function HomeScreen() {
                   <View style={[styles.statusPill, { borderColor: STATUS_COLOR[p.status] + "88" }]}>
                     <View style={[styles.statusDot, { backgroundColor: STATUS_COLOR[p.status] }]} />
                     <Text style={[styles.statusText, { color: STATUS_COLOR[p.status] }]}>
-                      {STATUS_LABEL[p.status]}
+                      {t(STATUS_LABEL_KEY[p.status])}
                     </Text>
                   </View>
                   <View style={[styles.ratingBadge, { backgroundColor: getRatingColor(p.rating) + "22" }]}>
@@ -419,14 +537,20 @@ export default function HomeScreen() {
 
           {/* ── AÇÕES RÁPIDAS ────────────────────────────────── */}
           <View>
-            <Text style={styles.sectionEyebrow}>AÇÕES RÁPIDAS</Text>
+            <Text style={styles.sectionEyebrow}>{t("dashboard.quickActions")}</Text>
             <View style={styles.actionsGrid}>
               {[
-                { icon: "🎯", label: "TREINAR",  sub: "Melhorar skills",     route: "/dashboard/training", accent: C.emerald },
-                { icon: "🏪", label: "MERCADO",  sub: "Contratar jogadores", route: "/dashboard/market",   accent: C.info },
-                { icon: "📋", label: "TÁTICAS",  sub: "Estratégias do time", route: "/dashboard/tactics",  accent: C.warning },
-                { icon: "🎮", label: "PARTIDAS", sub: "Ver calendário",      route: "/dashboard/matches",  accent: C.pink },
-              ].map((a, i) => (
+                { icon: "🎯", label: t("dashboard.actionTrain"),   sub: t("dashboard.actionTrainSub"),   route: "/dashboard/training", accent: C.emerald, flagKey: "training" },
+                { icon: "🏪", label: t("dashboard.actionMarket"),  sub: t("dashboard.actionMarketSub"),  route: "/dashboard/market",   accent: C.info },
+                { icon: "📋", label: t("dashboard.actionTactics"), sub: t("dashboard.actionTacticsSub"), route: "/dashboard/tactics",  accent: C.warning, flagKey: "tactics" },
+                { icon: "🎮", label: t("dashboard.actionMatches"), sub: t("dashboard.actionMatchesSub"), route: "/dashboard/matches",  accent: C.pink },
+                { icon: "🏆", label: t("dashboard.actionAchievements"), sub: t("dashboard.actionAchievementsSub"), route: "/dashboard/achievements", accent: C.warning },
+                { icon: "💬", label: t("dashboard.actionChat"), sub: t("dashboard.actionChatSub"), route: "/dashboard/chat", accent: C.info, flagKey: "chat" },
+                { icon: "📊", label: t("dashboard.actionRanking"), sub: t("dashboard.actionRankingSub"), route: "/dashboard/ranking", accent: C.pink },
+                { icon: "✉️", label: t("dashboard.actionMessages"), sub: t("dashboard.actionMessagesSub"), route: "/dashboard/messages", accent: C.emerald },
+              ]
+                .filter((a) => !a.flagKey || isEnabled(a.flagKey))
+                .map((a, i) => (
                 <TouchableOpacity
                   key={i}
                   style={[styles.actionCard, { borderColor: a.accent + "44" }]}
@@ -446,13 +570,12 @@ export default function HomeScreen() {
           {/* ── PERFORMANCE ──────────────────────────────────── */}
           <View style={styles.card}>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionEyebrow}>PERFORMANCE</Text>
+              <Text style={styles.sectionEyebrow}>{t("dashboard.performance")}</Text>
             </View>
             {[
-              { label: "Moral",       value: 85, color: C.emerald },
-              { label: "Forma",       value: 92, color: C.info },
-              { label: "Hype",        value: 78, color: C.warning },
-              { label: "Comunicação", value: 70, color: C.pink },
+              { label: t("dashboard.morale"), value: avgMorale, color: C.emerald },
+              { label: t("dashboard.form"),   value: avgForm,   color: C.info },
+              { label: t("dashboard.energy"), value: avgEnergy, color: C.warning },
             ].map((m, i, arr) => (
               <View key={i} style={[styles.perfRow, i < arr.length - 1 && styles.perfRowBorder]}>
                 <Text style={styles.perfLabel}>{m.label}</Text>
@@ -529,6 +652,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  storeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#161000",
+    borderWidth: 1,
+    borderColor: "#F59E0B44",
+    paddingHorizontal: 10,
+  },
+  storeBtnIcon: { fontSize: 12 },
+  storeBtnText: { fontSize: 12, fontWeight: "900", color: "#F59E0B" },
   iconBtnText: {
     fontSize: 16,
   },
@@ -793,6 +929,67 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: C.textFaint,
     marginTop: 2,
+  },
+
+  // Recompensa diária
+  dailyCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#161000",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#F59E0B33",
+    padding: 14,
+  },
+  dailyTitle: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: C.warning,
+    letterSpacing: 1,
+    marginBottom: 8,
+  },
+  dailyDotsRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  dailyDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#242424",
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+  dailyDotFilled: {
+    backgroundColor: C.warning,
+    borderColor: C.warning,
+  },
+  dailyDotToday: {
+    borderColor: C.warning,
+    borderWidth: 2,
+  },
+  dailyBtn: {
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: "#F59E0B22",
+    borderWidth: 1,
+    borderColor: "#F59E0B66",
+    justifyContent: "center",
+    alignItems: "center",
+    minWidth: 100,
+  },
+  dailyBtnDone: {
+    backgroundColor: "#161616",
+    borderColor: "#242424",
+  },
+  dailyBtnText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: C.warning,
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
 
   // Card

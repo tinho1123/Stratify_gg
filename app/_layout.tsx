@@ -1,9 +1,16 @@
+import { AppAlertProvider } from "@/components/ui/AppAlert";
 import { supabase } from "@/database/supabase";
+import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
+import { LanguageProvider } from "@/i18n/LanguageContext";
+import { registerForPushNotifications } from "@/services/notifications";
+import { configureRevenueCat } from "@/services/revenuecat";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, Platform, View } from "react-native";
+import mobileAds from "react-native-google-mobile-ads";
 import "react-native-reanimated";
 
 async function redirectAfterLogin() {
@@ -23,16 +30,32 @@ export default function RootLayout() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    (async () => {
+      // A Apple exige esse prompt antes de qualquer SDK de ads rodar rastreamento no iOS
+      // (App Tracking Transparency, iOS 14.5+) — sem isso, o app é rejeitado na review.
+      // O Android não tem esse prompt; segue direto pra inicialização do AdMob.
+      if (Platform.OS === "ios") {
+        await requestTrackingPermissionsAsync();
+      }
+      await mobileAds().initialize();
+    })();
+  }, []);
+
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         redirectAfterLogin();
+        configureRevenueCat(session.user.id);
+        registerForPushNotifications();
       }
       setChecking(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN") {
         redirectAfterLogin();
+        if (session) configureRevenueCat(session.user.id);
+        registerForPushNotifications();
       } else if (event === "SIGNED_OUT") {
         router.replace("/login");
       }
@@ -50,14 +73,20 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={DarkTheme}>
-      <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="login" options={{ headerShown: false }} />
-        <Stack.Screen name="setup" options={{ headerShown: false }} />
-        <Stack.Screen name="dashboard" options={{ headerShown: false }} />
-        <Stack.Screen name="manage_team" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <LanguageProvider>
+      <FeatureFlagsProvider>
+        <AppAlertProvider>
+          <ThemeProvider value={DarkTheme}>
+            <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="login" options={{ headerShown: false }} />
+              <Stack.Screen name="setup/team" options={{ headerShown: false }} />
+              <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </AppAlertProvider>
+      </FeatureFlagsProvider>
+    </LanguageProvider>
   );
 }

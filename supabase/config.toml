@@ -1,0 +1,14 @@
+project_id = "rxjqzosdtpnvpgeximgw"
+
+# O webhook do RevenueCat não é um cliente autenticado do Supabase — ele manda um bearer token
+# próprio (REVENUECAT_WEBHOOK_SECRET), validado dentro da própria function. Por isso desligamos
+# a verificação de JWT do gateway só pra esse endpoint; sem isso, o Supabase rejeita a chamada
+# antes mesmo do código da function rodar (erro UNAUTHORIZED_INVALID_JWT_FORMAT).
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+# Mesmo motivo: o Database Webhook do Supabase (Database > Webhooks) que chama essa function não
+# manda um JWT de usuário — a autenticação aqui é o header Authorization com PUSH_WEBHOOK_SECRET,
+# validado dentro do próprio código da function.
+[functions.send-push-notification]
+verify_jwt = false

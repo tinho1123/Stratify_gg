@@ -1,10 +1,15 @@
+import { useAppAlert } from "@/components/ui/AppAlert";
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Dimensions,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width } = Dimensions.get("window");
 
@@ -48,46 +53,46 @@ interface Player {
 
 const ATTR_GROUPS = [
   {
-    label: "COMBATE", color: "#EF4444",
+    labelKey: "manageTeam.groupCombat", color: "#EF4444",
     keys: [
-      { key: "aim",            label: "Aim" },
-      { key: "flick",          label: "Flick" },
-      { key: "tracking",       label: "Tracking" },
-      { key: "precisao",       label: "Precisão" },
-      { key: "recoil_control", label: "Controle de Recuo" },
+      { key: "aim",            labelKey: "manageTeam.attrAim" },
+      { key: "flick",          labelKey: "manageTeam.attrFlick" },
+      { key: "tracking",       labelKey: "manageTeam.attrTracking" },
+      { key: "precisao",       labelKey: "manageTeam.attrPrecision" },
+      { key: "recoil_control", labelKey: "manageTeam.attrRecoil" },
     ],
   },
   {
-    label: "MECÂNICA", color: "#F59E0B",
+    labelKey: "manageTeam.groupMechanics", color: "#F59E0B",
     keys: [
-      { key: "reacao",       label: "Reação" },
-      { key: "movimentacao", label: "Movimentação" },
-      { key: "strafing",     label: "Strafing" },
-      { key: "peek",         label: "Peek" },
+      { key: "reacao",       labelKey: "manageTeam.attrReaction" },
+      { key: "movimentacao", labelKey: "manageTeam.attrMovement" },
+      { key: "strafing",     labelKey: "manageTeam.attrStrafing" },
+      { key: "peek",         labelKey: "manageTeam.attrPeek" },
     ],
   },
   {
-    label: "GAME SENSE", color: "#8B5CF6",
+    labelKey: "manageTeam.groupGameSense", color: "#8B5CF6",
     keys: [
-      { key: "leitura",        label: "Leitura" },
-      { key: "posicionamento", label: "Posicionamento" },
-      { key: "decisao",        label: "Decisão" },
+      { key: "leitura",        labelKey: "manageTeam.attrReading" },
+      { key: "posicionamento", labelKey: "manageTeam.attrPositioning" },
+      { key: "decisao",        labelKey: "manageTeam.attrDecision" },
     ],
   },
   {
-    label: "CONSCIÊNCIA", color: "#3B82F6",
+    labelKey: "manageTeam.groupAwareness", color: "#3B82F6",
     keys: [
-      { key: "audio",     label: "Áudio" },
-      { key: "mapa",      label: "Mapa" },
-      { key: "awareness", label: "Awareness" },
+      { key: "audio",     labelKey: "manageTeam.attrAudio" },
+      { key: "mapa",      labelKey: "manageTeam.attrMap" },
+      { key: "awareness", labelKey: "manageTeam.attrAwareness" },
     ],
   },
   {
-    label: "EQUIPE", color: "#10B981",
+    labelKey: "manageTeam.groupTeam", color: "#10B981",
     keys: [
-      { key: "comunicacao", label: "Comunicação" },
-      { key: "teamplay",    label: "Teamplay" },
-      { key: "utilitarios", label: "Utilitários" },
+      { key: "comunicacao", labelKey: "manageTeam.attrComm" },
+      { key: "teamplay",    labelKey: "manageTeam.attrTeamplay" },
+      { key: "utilitarios", labelKey: "manageTeam.attrUtility" },
     ],
   },
 ];
@@ -106,10 +111,10 @@ const STATUS_COLOR: Record<string, string> = {
   banned:  "#F59E0B",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  online:  "DISPONÍVEL",
-  injured: "LESIONADO",
-  banned:  "SUSPENSO",
+const STATUS_LABEL_KEY: Record<string, string> = {
+  online:  "manageTeam.statusAvailable",
+  injured: "manageTeam.statusInjured",
+  banned:  "manageTeam.statusSuspended",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -127,11 +132,13 @@ function kd(kills: number, deaths: number) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function PlayerAttributes({ skills, loading }: { skills?: PlayerSkill[]; loading: boolean }) {
+  const { t } = useLanguage();
+
   if (loading) {
     return (
       <View style={{ paddingVertical: 24, alignItems: "center" }}>
         <ActivityIndicator size="small" color="#10B981" />
-        <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 8 }}>Carregando atributos...</Text>
+        <Text style={{ color: "#6B7280", fontSize: 12, marginTop: 8 }}>{t("manageTeam.loadingAttributes")}</Text>
       </View>
     );
   }
@@ -139,7 +146,7 @@ function PlayerAttributes({ skills, loading }: { skills?: PlayerSkill[]; loading
   if (!skills || skills.length === 0) {
     return (
       <View style={{ paddingVertical: 16, alignItems: "center" }}>
-        <Text style={{ color: "#4B5563", fontSize: 13 }}>Nenhum atributo registrado</Text>
+        <Text style={{ color: "#4B5563", fontSize: 13 }}>{t("manageTeam.noAttributes")}</Text>
       </View>
     );
   }
@@ -153,10 +160,10 @@ function PlayerAttributes({ skills, loading }: { skills?: PlayerSkill[]; loading
         if (vals.length === 0) return null;
         const groupAvg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
         return (
-          <View key={group.label} style={attrStyle.group}>
+          <View key={group.labelKey} style={attrStyle.group}>
             <View style={attrStyle.groupHeader}>
               <View style={[attrStyle.dot, { backgroundColor: group.color }]} />
-              <Text style={[attrStyle.groupLabel, { color: group.color }]}>{group.label}</Text>
+              <Text style={[attrStyle.groupLabel, { color: group.color }]}>{t(group.labelKey)}</Text>
               <View style={[attrStyle.avgBadge, { backgroundColor: group.color + "20" }]}>
                 <Text style={[attrStyle.avgText, { color: group.color }]}>{groupAvg}</Text>
               </View>
@@ -168,7 +175,7 @@ function PlayerAttributes({ skills, loading }: { skills?: PlayerSkill[]; loading
                 const ac = val >= 60 ? "#10B981" : val >= 45 ? "#F59E0B" : "#EF4444";
                 return (
                   <View key={attr.key} style={attrStyle.attrRow}>
-                    <Text style={attrStyle.attrLabel}>{attr.label}</Text>
+                    <Text style={attrStyle.attrLabel}>{t(attr.labelKey)}</Text>
                     <View style={attrStyle.track}>
                       <View style={[attrStyle.fill, { width: `${val}%` as any, backgroundColor: ac }]} />
                     </View>
@@ -237,12 +244,16 @@ function fmtPrice(v: number) {
 }
 
 export default function ManageTeamScreen() {
+  const { t } = useLanguage();
+  const { alert } = useAppAlert();
+  const insets = useSafeAreaInsets();
   const [players,       setPlayers]       = useState<Player[]>([]);
   const [myTeamId,      setMyTeamId]      = useState<string | null>(null);
   const [selected,      setSelected]      = useState<Player | null>(null);
   const [modalOpen,     setModalOpen]     = useState(false);
   const [loading,       setLoading]       = useState(true);
   const [loadingSkills, setLoadingSkills] = useState(false);
+  const [frameColor,    setFrameColor]    = useState<string | null>(null);
 
   // Sell flow
   const [sellOpen,     setSellOpen]     = useState(false);
@@ -251,9 +262,45 @@ export default function ManageTeamScreen() {
   const [sellState,    setSellState]    = useState<SellState>("idle");
   const [sellError,    setSellError]    = useState("");
 
+  const [renewing, setRenewing] = useState(false);
+  const [signingRole, setSigningRole] = useState<string | null>(null);
+
+  // Pull-down-to-close: só fecha o modal quando o ScrollView já está no topo
+  // (senão o gesto seria confundido com o próprio scroll do conteúdo).
+  const modalScrollYRef = useRef(0);
+  const modalDragY = useRef(new Animated.Value(0)).current;
+  const modalPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_evt, g) =>
+        modalScrollYRef.current <= 0 && g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
+      onPanResponderMove: (_evt, g) => {
+        if (g.dy > 0) modalDragY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_evt, g) => {
+        if (g.dy > 100 || g.vy > 0.9) {
+          Animated.timing(modalDragY, { toValue: 700, duration: 180, useNativeDriver: true }).start(() => {
+            modalDragY.setValue(0);
+            setModalOpen(false);
+          });
+        } else {
+          Animated.spring(modalDragY, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(modalDragY, { toValue: 0, useNativeDriver: true, bounciness: 6 }).start();
+      },
+    })
+  ).current;
+
   const fetchPlayers = useCallback(async () => {
     setLoading(true);
-    const { data: teamData } = await supabase.from("teams").select("id").single();
+    await Promise.all([
+      supabase.rpc("check_expired_contracts"),
+      supabase.rpc("check_expiring_contracts"),
+      supabase.rpc("claim_completed_training"),
+      supabase.rpc("check_recovered_players"),
+    ]);
+    const { data: teamData } = await supabase.from("teams").select("id, equipped_cosmetics").single();
     if (teamData) {
       setMyTeamId(teamData.id);
       const { data, error } = await supabase
@@ -262,13 +309,28 @@ export default function ManageTeamScreen() {
         .eq("team_id", teamData.id)
         .order("rating", { ascending: false });
       if (!error && data) setPlayers(data as Player[]);
+
+      // Cosmético "moldura de jogador" (loja de créditos premium) — puramente visual.
+      const frameCosmeticId = (teamData as any).equipped_cosmetics?.player_frame;
+      if (frameCosmeticId) {
+        const { data: cosmetic } = await supabase
+          .from("cosmetics")
+          .select("preview")
+          .eq("id", frameCosmeticId)
+          .single();
+        setFrameColor((cosmetic as any)?.preview?.color ?? null);
+      } else {
+        setFrameColor(null);
+      }
     }
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchPlayers(); }, [fetchPlayers]);
+  // Recarrega sempre que a tela ganha foco (cobre voltar de outra tela sem desmontar).
+  useFocusEffect(useCallback(() => { fetchPlayers(); }, [fetchPlayers]));
 
   const openPlayer = async (player: Player) => {
+    modalDragY.setValue(0);
     setSelected(player);
     setModalOpen(true);
     if (!player.skills) {
@@ -305,11 +367,56 @@ export default function ManageTeamScreen() {
     setSellError("");
   };
 
+  const renewContract = async () => {
+    if (!selected) return;
+    setRenewing(true);
+    const { data, error } = await supabase.rpc("renew_contract", {
+      p_player_id: selected.id,
+      p_months:    6,
+    });
+    setRenewing(false);
+
+    if (error) {
+      const msg = error.message?.includes("insufficient_budget")
+        ? t("manageTeam.renewErrorBudget")
+        : error.message?.includes("contract_already_expired")
+        ? t("manageTeam.renewErrorExpired")
+        : t("manageTeam.renewErrorGeneric");
+      alert(t("common.error"), msg);
+      return;
+    }
+
+    const newEnd = (data as any).contract_end as string;
+    setSelected((prev) => prev ? { ...prev, contract_end: newEnd } : prev);
+    setPlayers((prev) => prev.map((p) => (p.id === selected.id ? { ...p, contract_end: newEnd } : p)));
+    alert(
+      t("manageTeam.renewSuccessTitle"),
+      `${t("manageTeam.renewSuccessMsg")} ${new Date(newEnd).toLocaleDateString("pt-BR")}`,
+      "success",
+    );
+  };
+
+  const signFreeAgent = async (role: string) => {
+    setSigningRole(role);
+    const { error } = await supabase.rpc("sign_free_agent", { p_role: role });
+    setSigningRole(null);
+
+    if (error) {
+      const msg = error.message?.includes("roster_full")
+        ? t("manageTeam.freeAgentErrorFull")
+        : t("manageTeam.freeAgentErrorGeneric");
+      alert(t("common.error"), msg);
+      return;
+    }
+
+    fetchPlayers();
+  };
+
   const submitSell = async () => {
     if (!selected || !myTeamId) return;
     const price = parseInt(sellPrice.replace(/\D/g, ""), 10);
     if (!price || price <= 0) {
-      setSellError("Informe um preço inicial válido");
+      setSellError(t("manageTeam.sellErrorInvalidPrice"));
       return;
     }
 
@@ -328,7 +435,7 @@ export default function ManageTeamScreen() {
 
     if (error) {
       setSellState("error");
-      setSellError("Erro ao criar leilão. Tente novamente.");
+      setSellError(t("manageTeam.sellErrorGeneric"));
       return;
     }
 
@@ -351,19 +458,19 @@ export default function ManageTeamScreen() {
       {/* ── HEADER ─────────────────────────────────────────── */}
       <View style={s.header}>
         <View style={s.headerTop}>
-          <Text style={s.headerTitle}>ELENCO</Text>
+          <Text style={s.headerTitle}>{t("manageTeam.headerTitle")}</Text>
           <TouchableOpacity style={s.addBtn} onPress={() => router.push("/dashboard/market")}>
-            <Text style={s.addBtnText}>+ CONTRATAR</Text>
+            <Text style={s.addBtnText}>{t("manageTeam.addBtn")}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Stats row */}
         <View style={s.statsRow}>
           {[
-            { label: "Jogadores", value: `${players.length}/5` },
-            { label: "Rating",    value: avgRating },
-            { label: "Salário",   value: `$${(totalSal / 1000).toFixed(1)}K` },
-            { label: "Forma",     value: `${avgForm}%` },
+            { label: t("manageTeam.statPlayers"), value: `${players.length}/5` },
+            { label: t("manageTeam.statRating"),  value: avgRating },
+            { label: t("manageTeam.statSalary"),  value: `$${(totalSal / 1000).toFixed(1)}K` },
+            { label: t("manageTeam.statForm"),    value: `${avgForm}%` },
           ].map((item, i) => (
             <View key={i} style={s.statCard}>
               <Text style={s.statValue}>{item.value}</Text>
@@ -375,9 +482,9 @@ export default function ManageTeamScreen() {
         {/* Condition bars */}
         <View style={s.condRow}>
           {[
-            { label: "Moral",    value: avgMorale, color: "#8B5CF6" },
-            { label: "Energia",  value: avgEnergy, color: "#3B82F6" },
-            { label: "Forma",    value: avgForm,   color: "#10B981" },
+            { label: t("manageTeam.condMoral"),     value: avgMorale, color: "#8B5CF6" },
+            { label: t("manageTeam.condEnergy"),    value: avgEnergy, color: "#3B82F6" },
+            { label: t("manageTeam.condFormLabel"), value: avgForm,   color: "#10B981" },
           ].map((item) => (
             <View key={item.label} style={s.condItem}>
               <View style={s.condTrack}>
@@ -395,9 +502,9 @@ export default function ManageTeamScreen() {
         {/* Quick actions */}
         <View style={s.actions}>
           {[
-            { icon: "🎯", label: "TREINAR",  route: "/dashboard/training" },
-            { icon: "📋", label: "TÁTICAS",  route: "/dashboard/tactics" },
-            { icon: "🔄", label: "MERCADO",  route: "/dashboard/market" },
+            { icon: "🎯", label: t("dashboard.actionTrain"),   route: "/dashboard/training" },
+            { icon: "📋", label: t("dashboard.actionTactics"), route: "/dashboard/tactics" },
+            { icon: "🔄", label: t("dashboard.actionMarket"),  route: "/dashboard/market" },
           ].map((a) => (
             <TouchableOpacity
               key={a.label}
@@ -410,7 +517,32 @@ export default function ManageTeamScreen() {
           ))}
         </View>
 
-        <Text style={s.sectionTitle}>JOGADORES</Text>
+        {!loading && players.length < 5 && (
+          <View style={s.freeAgentCard}>
+            <Text style={s.freeAgentTitle}>{t("manageTeam.freeAgentTitle")}</Text>
+            <Text style={s.freeAgentSub}>
+              {t("manageTeam.freeAgentSub")} ({players.length}/5)
+            </Text>
+            <View style={s.freeAgentRoles}>
+              {["IGL", "AWPer", "Support", "Entry", "Flex"].map((role) => (
+                <TouchableOpacity
+                  key={role}
+                  style={[s.freeAgentRoleBtn, { borderColor: (ROLE_COLOR[role] ?? "#6B7280") + "55" }]}
+                  onPress={() => signFreeAgent(role)}
+                  disabled={signingRole !== null}
+                >
+                  {signingRole === role ? (
+                    <ActivityIndicator size="small" color={ROLE_COLOR[role] ?? "#6B7280"} />
+                  ) : (
+                    <Text style={[s.freeAgentRoleText, { color: ROLE_COLOR[role] ?? "#6B7280" }]}>{role}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <Text style={s.sectionTitle}>{t("manageTeam.sectionPlayers")}</Text>
 
         {loading ? (
           <View style={s.center}>
@@ -418,7 +550,7 @@ export default function ManageTeamScreen() {
           </View>
         ) : players.length === 0 ? (
           <View style={s.center}>
-            <Text style={s.emptyText}>Nenhum jogador no elenco</Text>
+            <Text style={s.emptyText}>{t("manageTeam.emptyRoster")}</Text>
           </View>
         ) : (
           players.map((player) => {
@@ -435,7 +567,11 @@ export default function ManageTeamScreen() {
                 {/* Top row */}
                 <View style={s.cardTop}>
                   {/* Avatar */}
-                  <View style={[s.avatar, { backgroundColor: rc + "22", borderColor: rc + "55" }]}>
+                  <View style={[
+                    s.avatar,
+                    { backgroundColor: rc + "22", borderColor: frameColor ?? rc + "55" },
+                    frameColor && { borderWidth: 2 },
+                  ]}>
                     <Text style={[s.avatarText, { color: rc }]}>{player.name[0].toUpperCase()}</Text>
                   </View>
 
@@ -447,7 +583,7 @@ export default function ManageTeamScreen() {
                         <Text style={[s.roleText, { color: rc }]}>{player.role}</Text>
                       </View>
                       <Text style={s.ageDot}>·</Text>
-                      <Text style={s.ageText}>{player.age} anos</Text>
+                      <Text style={s.ageText}>{player.age} {t("manageTeam.yearsOld")}</Text>
                     </View>
                   </View>
 
@@ -460,16 +596,16 @@ export default function ManageTeamScreen() {
                 {/* Status */}
                 <View style={[s.statusChip, { backgroundColor: sc + "15", borderColor: sc + "40" }]}>
                   <View style={[s.statusDot, { backgroundColor: sc }]} />
-                  <Text style={[s.statusText, { color: sc }]}>{STATUS_LABEL[player.status]}</Text>
+                  <Text style={[s.statusText, { color: sc }]}>{t(STATUS_LABEL_KEY[player.status])}</Text>
                 </View>
 
                 {/* Stats */}
                 <View style={s.statsGrid}>
                   {[
-                    { label: "K/D",     value: kd(player.kills, player.deaths) },
-                    { label: "ADR",     value: String(player.adr) },
-                    { label: "Assists", value: String(player.assists) },
-                    { label: "Salário", value: `$${(player.salary / 1000).toFixed(1)}K` },
+                    { label: t("manageTeam.statKD"),      value: kd(player.kills, player.deaths) },
+                    { label: t("manageTeam.statADR"),     value: String(player.adr) },
+                    { label: t("manageTeam.statAssists"), value: String(player.assists) },
+                    { label: t("manageTeam.statSalary"),  value: `$${(player.salary / 1000).toFixed(1)}K` },
                   ].map((stat) => (
                     <View key={stat.label} style={s.statItem}>
                       <Text style={s.statItemLabel}>{stat.label}</Text>
@@ -497,7 +633,7 @@ export default function ManageTeamScreen() {
 
                 {/* Contract */}
                 <Text style={s.contractText}>
-                  Contrato até {new Date(player.contract_end).toLocaleDateString("pt-BR")}
+                  {t("manageTeam.contractUntil")} {new Date(player.contract_end).toLocaleDateString("pt-BR")}
                 </Text>
               </TouchableOpacity>
             );
@@ -506,9 +642,19 @@ export default function ManageTeamScreen() {
       </ScrollView>
 
       {/* ── PLAYER MODAL ───────────────────────────────────── */}
-      <Modal visible={modalOpen} animationType="slide" transparent onRequestClose={() => setModalOpen(false)}>
-        <Pressable style={s.overlay} onPress={() => setModalOpen(false)}>
-          <Pressable style={s.sheet} onPress={() => {}}>
+      <Modal
+        visible={modalOpen}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setModalOpen(false)}
+      >
+        <View style={s.overlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setModalOpen(false)} />
+          <Animated.View
+            style={[s.sheet, { paddingBottom: insets.bottom, transform: [{ translateY: modalDragY }] }]}
+            {...modalPanResponder.panHandlers}
+          >
 
             {selected && (() => {
               const rc = ROLE_COLOR[selected.role] ?? "#6B7280";
@@ -521,7 +667,11 @@ export default function ManageTeamScreen() {
 
                   {/* Modal header */}
                   <View style={[s.modalHeader, { borderBottomColor: rc + "33" }]}>
-                    <View style={[s.modalAvatar, { backgroundColor: rc + "22", borderColor: rc }]}>
+                    <View style={[
+                      s.modalAvatar,
+                      { backgroundColor: rc + "22", borderColor: frameColor ?? rc },
+                      frameColor && { borderWidth: 3 },
+                    ]}>
                       <Text style={[s.modalAvatarText, { color: rc }]}>{selected.name[0].toUpperCase()}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
@@ -532,7 +682,7 @@ export default function ManageTeamScreen() {
                         </View>
                         <View style={[s.statusChip, { backgroundColor: sc + "15", borderColor: sc + "40" }]}>
                           <View style={[s.statusDot, { backgroundColor: sc }]} />
-                          <Text style={[s.statusText, { color: sc }]}>{STATUS_LABEL[selected.status]}</Text>
+                          <Text style={[s.statusText, { color: sc }]}>{t(STATUS_LABEL_KEY[selected.status])}</Text>
                         </View>
                       </View>
                     </View>
@@ -542,16 +692,21 @@ export default function ManageTeamScreen() {
                     </View>
                   </View>
 
-                  <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+                  <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    style={{ flex: 1 }}
+                    scrollEventThrottle={16}
+                    onScroll={(e) => { modalScrollYRef.current = e.nativeEvent.contentOffset.y; }}
+                  >
 
                     {/* Info */}
                     <View style={s.modalSection}>
-                      <Text style={s.modalSectionTitle}>INFORMAÇÕES</Text>
+                      <Text style={s.modalSectionTitle}>{t("manageTeam.infoSection")}</Text>
                       <View style={s.infoGrid}>
                         {[
-                          { label: "Idade",    value: `${selected.age} anos` },
-                          { label: "Salário",  value: `$${selected.salary.toLocaleString()}/mês` },
-                          { label: "Contrato", value: `até ${new Date(selected.contract_end).toLocaleDateString("pt-BR")}` },
+                          { label: t("manageTeam.infoAge"),    value: `${selected.age} ${t("manageTeam.yearsOld")}` },
+                          { label: t("manageTeam.infoSalary"), value: `$${selected.salary.toLocaleString()}${t("manageTeam.infoSalaryPerMonth")}` },
+                          { label: t("manageTeam.infoContract"), value: `${t("manageTeam.infoContractUntil")} ${new Date(selected.contract_end).toLocaleDateString("pt-BR")}` },
                         ].map((item) => (
                           <View key={item.label} style={s.infoCard}>
                             <Text style={s.infoLabel}>{item.label}</Text>
@@ -563,14 +718,14 @@ export default function ManageTeamScreen() {
 
                     {/* Stats */}
                     <View style={s.modalSection}>
-                      <Text style={s.modalSectionTitle}>ESTATÍSTICAS</Text>
+                      <Text style={s.modalSectionTitle}>{t("manageTeam.statsSection")}</Text>
                       <View style={s.statsGrid4}>
                         {[
-                          { label: "Kills",   value: selected.kills },
-                          { label: "Deaths",  value: selected.deaths },
-                          { label: "Assists", value: selected.assists },
-                          { label: "ADR",     value: selected.adr },
-                          { label: "K/D",     value: kd(selected.kills, selected.deaths) },
+                          { label: t("manageTeam.statKills"),   value: selected.kills },
+                          { label: t("manageTeam.statDeaths"),  value: selected.deaths },
+                          { label: t("manageTeam.statAssists"), value: selected.assists },
+                          { label: t("manageTeam.statADR"),     value: selected.adr },
+                          { label: t("manageTeam.statKD"),      value: kd(selected.kills, selected.deaths) },
                         ].map((stat) => (
                           <View key={stat.label} style={s.statBox}>
                             <Text style={s.statBoxValue}>{stat.value}</Text>
@@ -582,36 +737,50 @@ export default function ManageTeamScreen() {
 
                     {/* Atributos por categoria */}
                     <View style={s.modalSection}>
-                      <Text style={s.modalSectionTitle}>ATRIBUTOS</Text>
+                      <Text style={s.modalSectionTitle}>{t("manageTeam.attributesSection")}</Text>
                     </View>
                     <PlayerAttributes skills={selected.skills} loading={loadingSkills} />
 
                     {/* Condition */}
                     <View style={s.modalSection}>
-                      <Text style={s.modalSectionTitle}>CONDIÇÃO</Text>
+                      <Text style={s.modalSectionTitle}>{t("manageTeam.conditionSection")}</Text>
                       <View style={s.condCard}>
-                        <CondBar label="Energia" value={selected.energy} color="#3B82F6" />
-                        <CondBar label="Moral"   value={selected.morale} color="#8B5CF6" />
-                        <CondBar label="Forma"   value={selected.form}   color="#10B981" />
+                        <CondBar label={t("manageTeam.condEnergy")}    value={selected.energy} color="#3B82F6" />
+                        <CondBar label={t("manageTeam.condMoral")}     value={selected.morale} color="#8B5CF6" />
+                        <CondBar label={t("manageTeam.condFormLabel")} value={selected.form}   color="#10B981" />
                       </View>
                     </View>
 
                     {/* Actions */}
                     <View style={s.modalActions}>
-                      <TouchableOpacity style={[s.modalBtn, { backgroundColor: rc }]}>
-                        <Text style={s.modalBtnText}>🎯  TREINAR</Text>
+                      <TouchableOpacity
+                        style={[s.modalBtn, { backgroundColor: rc }]}
+                        onPress={() => {
+                          setModalOpen(false);
+                          router.push({ pathname: "/dashboard/training", params: { playerId: selected.id } });
+                        }}
+                      >
+                        <Text style={s.modalBtnText}>{t("manageTeam.trainBtn")}</Text>
                       </TouchableOpacity>
-                      <View style={s.modalBtnRow}>
-                        <TouchableOpacity style={[s.modalBtnSm, { borderColor: "#374151" }]}>
-                          <Text style={s.modalBtnSmText}>💬  CONVERSAR</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[s.modalBtnSm, { borderColor: "#EF444460" }]}
-                          onPress={openSell}
-                        >
-                          <Text style={[s.modalBtnSmText, { color: "#EF4444" }]}>🔄  VENDER</Text>
-                        </TouchableOpacity>
-                      </View>
+                      <TouchableOpacity
+                        style={[s.modalBtn, { backgroundColor: "#3B82F6", marginTop: 10 }]}
+                        onPress={renewContract}
+                        disabled={renewing}
+                      >
+                        {renewing ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <Text style={s.modalBtnText}>
+                            {t("manageTeam.renewBtn")} (${(selected.salary * 6).toLocaleString()})
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[s.modalBtnSm, { borderColor: "#EF444460" }]}
+                        onPress={openSell}
+                      >
+                        <Text style={[s.modalBtnSmText, { color: "#EF4444" }]}>{t("manageTeam.sellBtn")}</Text>
+                      </TouchableOpacity>
                     </View>
 
                     <View style={{ height: 32 }} />
@@ -619,14 +788,18 @@ export default function ManageTeamScreen() {
                 </>
               );
             })()}
-          </Pressable>
-        </Pressable>
+          </Animated.View>
+        </View>
       </Modal>
 
       {/* ── SELL MODAL ────────────────────────────────────── */}
-      <Modal visible={sellOpen} animationType="slide" transparent onRequestClose={closeSell}>
-        <Pressable style={s.overlay} onPress={() => sellState === "idle" && closeSell()}>
-          <Pressable style={s.sheet} onPress={() => {}}>
+      <Modal visible={sellOpen} animationType="slide" transparent statusBarTranslucent onRequestClose={closeSell}>
+        <View style={s.overlay}>
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => sellState === "idle" && closeSell()}
+          />
+          <View style={[s.sheet, { paddingBottom: insets.bottom }]}>
             <View style={s.handle} />
 
             {selected && (
@@ -636,10 +809,10 @@ export default function ManageTeamScreen() {
                   <>
                     {/* Header */}
                     <View style={s.sellHeader}>
-                      <Text style={s.sellTitle}>COLOCAR À VENDA</Text>
+                      <Text style={s.sellTitle}>{t("manageTeam.sellModalTitle")}</Text>
                       <Text style={s.sellSub}>
                         <Text style={{ color: "#FFFFFF", fontWeight: "700" }}>{selected.name}</Text>
-                        {" "}será leiloado — o maior lance vence ao fim do tempo
+                        {" "}{t("manageTeam.sellModalSub")}
                       </Text>
                     </View>
 
@@ -653,7 +826,7 @@ export default function ManageTeamScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={s.sellPlayerName}>{selected.name}</Text>
                         <Text style={s.sellPlayerMeta}>
-                          {selected.role} · {selected.age} anos · Rating {selected.rating}
+                          {selected.role} · {selected.age} {t("manageTeam.sellPlayerMeta")} {selected.rating}
                         </Text>
                       </View>
                       <View style={[s.sellRating, { borderColor: ratingColor(selected.rating) + "55" }]}>
@@ -664,7 +837,7 @@ export default function ManageTeamScreen() {
                     </View>
 
                     {/* Price input */}
-                    <Text style={s.sellLabel}>PREÇO INICIAL DO LEILÃO</Text>
+                    <Text style={s.sellLabel}>{t("manageTeam.sellLabelPrice")}</Text>
                     <View style={s.sellInputWrap}>
                       <Text style={s.sellDollar}>$</Text>
                       <TextInput
@@ -683,7 +856,7 @@ export default function ManageTeamScreen() {
                     </View>
 
                     {/* Duration */}
-                    <Text style={s.sellLabel}>DURAÇÃO DO LEILÃO</Text>
+                    <Text style={s.sellLabel}>{t("manageTeam.sellLabelDuration")}</Text>
                     <View style={s.durationRow}>
                       {DURATIONS.map((d) => (
                         <TouchableOpacity
@@ -713,7 +886,7 @@ export default function ManageTeamScreen() {
                     {/* Actions */}
                     <View style={s.sellActions}>
                       <TouchableOpacity style={s.sellBtnCancel} onPress={closeSell}>
-                        <Text style={s.sellBtnCancelText}>CANCELAR</Text>
+                        <Text style={s.sellBtnCancelText}>{t("manageTeam.cancelBtn")}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[s.sellBtnConfirm, sellState === "loading" && { opacity: 0.6 }]}
@@ -723,7 +896,7 @@ export default function ManageTeamScreen() {
                         {sellState === "loading" ? (
                           <ActivityIndicator size="small" color="#FFF" />
                         ) : (
-                          <Text style={s.sellBtnConfirmText}>LEILOAR</Text>
+                          <Text style={s.sellBtnConfirmText}>{t("manageTeam.auctionBtn")}</Text>
                         )}
                       </TouchableOpacity>
                     </View>
@@ -732,12 +905,12 @@ export default function ManageTeamScreen() {
                   /* Success state */
                   <View style={s.sellSuccess}>
                     <Text style={s.sellSuccessEmoji}>🔨</Text>
-                    <Text style={s.sellSuccessTitle}>LEILÃO CRIADO!</Text>
+                    <Text style={s.sellSuccessTitle}>{t("manageTeam.auctionCreatedTitle")}</Text>
                     <Text style={s.sellSuccessSub}>
-                      {selected.name} está no mercado por {sellDuration}h
+                      {selected.name} {t("manageTeam.auctionCreatedSub")} {sellDuration}h
                     </Text>
                     <Text style={s.sellSuccessSub}>
-                      Preço inicial: {fmtPrice(parseInt(sellPrice || "0"))}
+                      {t("manageTeam.auctionCreatedPrice")} {fmtPrice(parseInt(sellPrice || "0"))}
                     </Text>
                     <TouchableOpacity
                       style={[s.sellBtnConfirm, { marginTop: 20 }]}
@@ -746,15 +919,15 @@ export default function ManageTeamScreen() {
                         setModalOpen(false);
                       }}
                     >
-                      <Text style={s.sellBtnConfirmText}>ÓTIMO!</Text>
+                      <Text style={s.sellBtnConfirmText}>{t("manageTeam.greatBtn")}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
               </View>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -808,6 +981,20 @@ const s = StyleSheet.create({
     fontSize: 11, fontWeight: "800", color: "#4B5563",
     letterSpacing: 3, paddingHorizontal: 16, marginBottom: 8,
   },
+
+  freeAgentCard: {
+    marginHorizontal: 16, marginBottom: 16, backgroundColor: "#0D0D0D",
+    borderRadius: 12, borderWidth: 1, borderColor: "#F59E0B44",
+    padding: 14, gap: 10,
+  },
+  freeAgentTitle: { fontSize: 13, fontWeight: "800", color: "#F59E0B" },
+  freeAgentSub:   { fontSize: 11, color: "#6B7280" },
+  freeAgentRoles: { flexDirection: "row", gap: 8 },
+  freeAgentRoleBtn: {
+    flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1,
+    backgroundColor: "#111", alignItems: "center",
+  },
+  freeAgentRoleText: { fontSize: 11, fontWeight: "800" },
 
   center: { paddingVertical: 40, alignItems: "center" },
   emptyText: { color: "#4B5563", fontSize: 13 },
@@ -865,7 +1052,7 @@ const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: "#0D0D0D", borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    borderWidth: 1, borderColor: "#1A1A1A", maxHeight: "92%",
+    borderWidth: 1, borderColor: "#1A1A1A", height: "92%",
   },
   handle: {
     width: 36, height: 4, borderRadius: 2, backgroundColor: "#2A2A2A",
@@ -920,7 +1107,6 @@ const s = StyleSheet.create({
   modalActions: { paddingHorizontal: 16, paddingTop: 16, gap: 10 },
   modalBtn: { paddingVertical: 14, borderRadius: 12, alignItems: "center" },
   modalBtnText: { fontSize: 13, fontWeight: "800", color: "#000", letterSpacing: 0.5 },
-  modalBtnRow: { flexDirection: "row", gap: 10 },
   modalBtnSm: {
     flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1,
     alignItems: "center", backgroundColor: "#111",

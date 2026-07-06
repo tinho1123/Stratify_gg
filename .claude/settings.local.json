@@ -9,7 +9,11 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('expo',{}\\).get\\('android',{}\\).get\\('package','not-set'\\), '|', d.get\\('expo',{}\\).get\\('name','not-set'\\)\\)\")",
       "Bash(node -e \"const a=require\\('./app.json'\\); console.log\\(a.expo?.android?.package, a.expo?.name\\)\")",
       "Bash(node -e \"const a=require\\('./app.json'\\); console.log\\(JSON.stringify\\(a.expo?.android\\)\\)\")",
-      "Bash(node -e \"const a=require\\('./app.json'\\); console.log\\(a.expo?.slug, a.expo?.scheme\\)\")"
+      "Bash(node -e \"const a=require\\('./app.json'\\); console.log\\(a.expo?.slug, a.expo?.scheme\\)\")",
+      "Bash(git check-ignore *)",
+      "Bash(supabase --version)",
+      "Bash(npm view *)",
+      "Bash(npx expo *)"
     ]
   },
   "enableAllProjectMcpServers": true,
