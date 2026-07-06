@@ -1,10 +1,10 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { Paywall } from "@/components/ui/Paywall";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useLanguage } from "@/i18n/LanguageContext";
-import { getSeasonPassPackage, isRevenueCatConfigured, purchasePackage } from "@/services/revenuecat";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -15,7 +15,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import type { PurchasesPackage } from "react-native-purchases";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -115,8 +114,7 @@ export default function SeasonScreen() {
   const [claimedKeys, setClaimedKeys] = useState<Set<string>>(new Set());
   const [cosmeticMap, setCosmeticMap] = useState<Map<string, CosmeticInfo>>(new Map());
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
-  const [passPkg, setPassPkg]         = useState<PurchasesPackage | null>(null);
-  const [subscribing, setSubscribing] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -193,11 +191,6 @@ export default function SeasonScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  useEffect(() => {
-    if (!isRevenueCatConfigured()) return;
-    getSeasonPassPackage().then(setPassPkg).catch(() => {});
-  }, []);
-
   const hasJoined = !!myTeamId && standings.some((row) => row.team_id === myTeamId);
 
   const joinLeague = async () => {
@@ -234,35 +227,27 @@ export default function SeasonScreen() {
     fetchData();
   };
 
-  const subscribePass = async () => {
-    if (!passPkg || !myTeamId) return;
-    setSubscribing(true);
-    try {
-      await purchasePackage(passPkg);
+  const handlePaywallSubscribed = async () => {
+    if (!myTeamId) return;
+    setShowPaywall(false);
 
-      // A ativação em si acontece no servidor (webhook do RevenueCat), de forma assíncrona —
-      // reconsulta o time algumas vezes antes de desistir.
-      let updated = false;
-      for (let i = 0; i < 4 && !updated; i++) {
-        await sleep(2000);
-        const { data } = await supabase.from("teams").select("season_pass_active").eq("id", myTeamId).single();
-        if (data && (data as any).season_pass_active) {
-          setPassActive(true);
-          updated = true;
-        }
+    // A ativação em si acontece no servidor (webhook do RevenueCat), de forma assíncrona —
+    // reconsulta o time algumas vezes antes de desistir.
+    let updated = false;
+    for (let i = 0; i < 4 && !updated; i++) {
+      await sleep(2000);
+      const { data } = await supabase.from("teams").select("season_pass_active").eq("id", myTeamId).single();
+      if (data && (data as any).season_pass_active) {
+        setPassActive(true);
+        updated = true;
       }
-
-      alert(
-        t("season.passSubscribeSuccessTitle"),
-        updated ? t("season.passSubscribeSuccessMsg") : t("season.passSubscribePendingMsg"),
-        "success",
-      );
-    } catch (err: any) {
-      if (err?.userCancelled) return;
-      alert(t("common.error"), t("season.errPurchase"));
-    } finally {
-      setSubscribing(false);
     }
+
+    alert(
+      t("season.passSubscribeSuccessTitle"),
+      updated ? t("season.passSubscribeSuccessMsg") : t("season.passSubscribePendingMsg"),
+      "success",
+    );
   };
 
   return (
@@ -319,20 +304,9 @@ export default function SeasonScreen() {
             {!passActive && (
               <View style={s.passCta}>
                 <Text style={s.passCtaText}>{t("season.passCtaText")}</Text>
-                {passPkg ? (
-                  <>
-                    <TouchableOpacity style={s.passCtaBtn} onPress={subscribePass} disabled={subscribing}>
-                      {subscribing
-                        ? <ActivityIndicator size="small" color="#F59E0B" />
-                        : <Text style={s.passCtaBtnText}>{t("season.passSubscribeBtn")} · {passPkg.product.priceString}</Text>}
-                    </TouchableOpacity>
-                    <Text style={s.passDisclosure}>
-                      {t("season.passDisclosure").replace("{price}", passPkg.product.priceString)}
-                    </Text>
-                  </>
-                ) : (
-                  <Text style={s.passComingSoon}>{t("season.passComingSoon")}</Text>
-                )}
+                <TouchableOpacity style={s.passCtaBtn} onPress={() => setShowPaywall(true)}>
+                  <Text style={s.passCtaBtnText}>{t("season.passSubscribeBtn")}</Text>
+                </TouchableOpacity>
               </View>
             )}
 
@@ -409,6 +383,12 @@ export default function SeasonScreen() {
 
         </ScrollView>
       )}
+
+      <Paywall
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        onSubscribed={handlePaywallSubscribed}
+      />
     </SafeAreaView>
   );
 }
@@ -489,8 +469,6 @@ const s = StyleSheet.create({
     minWidth: 220, alignItems: "center", height: 44, justifyContent: "center",
   },
   passCtaBtnText: { fontSize: 12, fontWeight: "800", color: "#F59E0B", letterSpacing: 0.5 },
-  passComingSoon: { fontSize: 11, color: "#4B5563" },
-  passDisclosure: { fontSize: 10, color: "#6B7280", textAlign: "center", lineHeight: 14, paddingHorizontal: 8 },
 
   tierRow: {
     flexDirection: "row", alignItems: "center", gap: 8,

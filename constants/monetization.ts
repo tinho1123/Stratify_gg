@@ -10,3 +10,8 @@ export const CREDIT_PRODUCT_IDS = [
 ] as const;
 
 export const SEASON_PASS_PRODUCT_ID = "stratify_season_pass";
+
+// Apple exige link pra Termos de Uso e Política de Privacidade em qualquer tela de assinatura
+// (App Store Review Guideline 3.1.2). Substituir por URLs reais publicadas antes de submeter.
+export const TERMS_URL = "https://stratify.gg/terms";
+export const PRIVACY_URL = "https://stratify.gg/privacy";

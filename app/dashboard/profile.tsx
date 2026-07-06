@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,8 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+const DISCORD_URL = "https://discord.gg/rb8FfsSzu";
 
 export default function ProfileScreen() {
   const { language, setLanguage, t } = useLanguage();
@@ -118,6 +121,23 @@ export default function ProfileScreen() {
               <Text style={styles.securityDesc}>{t("profile.securityDesc")}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Community Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.communitySection")}</Text>
+          <TouchableOpacity
+            style={styles.discordCard}
+            onPress={() => Linking.openURL(DISCORD_URL)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.discordIcon}>💬</Text>
+            <View style={styles.discordContent}>
+              <Text style={styles.discordTitle}>{t("profile.discordTitle")}</Text>
+              <Text style={styles.discordDesc}>{t("profile.discordDesc")}</Text>
+            </View>
+            <Text style={styles.discordArrow}>→</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Logout */}
@@ -293,6 +313,38 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     fontSize: 13,
     lineHeight: 18,
+  },
+  discordCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(88,101,242,0.1)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#5865F2",
+    padding: 16,
+    gap: 12,
+  },
+  discordIcon: {
+    fontSize: 24,
+  },
+  discordContent: {
+    flex: 1,
+  },
+  discordTitle: {
+    color: "#5865F2",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  discordDesc: {
+    color: "#6B7280",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  discordArrow: {
+    color: "#5865F2",
+    fontSize: 18,
+    fontWeight: "700",
   },
   logoutButton: {
     backgroundColor: "rgba(239,68,68,0.1)",
