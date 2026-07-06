@@ -1,4 +1,5 @@
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SignupScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -32,23 +34,23 @@ export default function SignupScreen() {
   const handleSignup = async () => {
     setError(null);
     if (!email || !password || !confirm) {
-      setError("Preencha todos os campos.");
+      setError(t("signup.errFillFields"));
       return;
     }
     if (password !== confirm) {
-      setError("As senhas não coincidem.");
+      setError(t("signup.errPasswordMismatch"));
       return;
     }
     if (password.length < 8) {
-      setError("A senha deve ter pelo menos 8 caracteres.");
+      setError(t("signup.errPasswordTooShort"));
       return;
     }
     if (!/[A-Z]/.test(password)) {
-      setError("A senha deve conter pelo menos uma letra maiúscula.");
+      setError(t("signup.errPasswordNoUpper"));
       return;
     }
     if (!/[0-9]/.test(password)) {
-      setError("A senha deve conter pelo menos um número.");
+      setError(t("signup.errPasswordNoNumber"));
       return;
     }
     setLoading(true);
@@ -87,24 +89,24 @@ export default function SignupScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.title}>CRIAR CONTA</Text>
-            <Text style={styles.subtitle}>Comece sua jornada no esports</Text>
+            <Text style={styles.title}>{t("signup.title")}</Text>
+            <Text style={styles.subtitle}>{t("signup.subtitle")}</Text>
           </View>
 
           {pendingConfirmation ? (
             <View style={styles.confirmBox}>
               <Text style={styles.confirmIcon}>📬</Text>
-              <Text style={styles.confirmTitle}>Confirme seu e-mail</Text>
+              <Text style={styles.confirmTitle}>{t("signup.confirmEmailTitle")}</Text>
               <Text style={styles.confirmDesc}>
-                Enviamos um link de confirmação para{"\n"}
+                {t("signup.confirmEmailDesc1")}{"\n"}
                 <Text style={styles.confirmEmail}>{email}</Text>
-                {"\n\n"}Acesse seu e-mail e clique no link antes de fazer login.
+                {"\n\n"}{t("signup.confirmEmailDesc2")}
               </Text>
               <TouchableOpacity
                 style={styles.confirmButton}
                 onPress={() => router.replace("/login")}
               >
-                <Text style={styles.confirmButtonText}>Ir para o login</Text>
+                <Text style={styles.confirmButtonText}>{t("signup.goToLogin")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -118,11 +120,11 @@ export default function SignupScreen() {
                 )}
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>E-mail</Text>
+                  <Text style={styles.label}>{t("login.emailLabel")}</Text>
                   <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                     <TextInput
                       style={styles.input}
-                      placeholder="usuario@esports.gg"
+                      placeholder={t("login.emailPlaceholder")}
                       placeholderTextColor="#4B5563"
                       value={email}
                       onChangeText={setEmail}
@@ -136,7 +138,7 @@ export default function SignupScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Senha</Text>
+                  <Text style={styles.label}>{t("login.passwordLabel")}</Text>
                   <View style={[styles.inputWrapper, passwordFocused && styles.inputFocused]}>
                     <TextInput
                       style={styles.input}
@@ -159,7 +161,7 @@ export default function SignupScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Confirmar senha</Text>
+                  <Text style={styles.label}>{t("signup.confirmPasswordLabel")}</Text>
                   <View style={[styles.inputWrapper, confirmFocused && styles.inputFocused]}>
                     <TextInput
                       style={styles.input}
@@ -184,18 +186,18 @@ export default function SignupScreen() {
                   {loading ? (
                     <View style={styles.loadingRow}>
                       <ActivityIndicator size="small" color="#000" />
-                      <Text style={styles.signupButtonText}>Criando conta...</Text>
+                      <Text style={styles.signupButtonText}>{t("signup.creating")}</Text>
                     </View>
                   ) : (
-                    <Text style={styles.signupButtonText}>Criar conta</Text>
+                    <Text style={styles.signupButtonText}>{t("signup.createBtn")}</Text>
                   )}
                 </TouchableOpacity>
               </View>
 
               <View style={styles.loginRow}>
-                <Text style={styles.loginText}>Já tem conta? </Text>
+                <Text style={styles.loginText}>{t("signup.alreadyHaveAccount")}</Text>
                 <TouchableOpacity onPress={() => router.back()}>
-                  <Text style={styles.loginLink}>Entrar</Text>
+                  <Text style={styles.loginLink}>{t("signup.loginLink")}</Text>
                 </TouchableOpacity>
               </View>
             </>

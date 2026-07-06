@@ -1,4 +1,5 @@
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function ForgotPasswordScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState("");
   const [emailFocused, setEmailFocused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,14 +28,14 @@ export default function ForgotPasswordScreen() {
   const handleSubmit = async () => {
     setError(null);
     if (!email.trim()) {
-      setError("Informe seu e-mail.");
+      setError(t("forgotPassword.errEmptyEmail"));
       return;
     }
     setLoading(true);
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim());
     setLoading(false);
     if (resetError) {
-      setError("Não foi possível enviar o e-mail. Verifique o endereço.");
+      setError(t("forgotPassword.errGeneric"));
       return;
     }
     setSent(true);
@@ -59,24 +61,24 @@ export default function ForgotPasswordScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.title}>RECUPERAR SENHA</Text>
+            <Text style={styles.title}>{t("forgotPassword.title")}</Text>
             <Text style={styles.subtitle}>
-              Enviaremos um link de redefinição para seu e-mail
+              {t("forgotPassword.subtitle")}
             </Text>
           </View>
 
           {sent ? (
             <View style={styles.successBox}>
               <Text style={styles.successIcon}>📬</Text>
-              <Text style={styles.successTitle}>E-mail enviado!</Text>
+              <Text style={styles.successTitle}>{t("forgotPassword.emailSentTitle")}</Text>
               <Text style={styles.successDesc}>
-                Verifique sua caixa de entrada (e o spam) para o link de redefinição de senha.
+                {t("forgotPassword.emailSentDesc")}
               </Text>
               <TouchableOpacity
                 style={styles.backButton}
                 onPress={() => router.replace("/login")}
               >
-                <Text style={styles.backButtonText}>Voltar para o login</Text>
+                <Text style={styles.backButtonText}>{t("forgotPassword.backToLoginBtn")}</Text>
               </TouchableOpacity>
             </View>
           ) : (
@@ -88,11 +90,11 @@ export default function ForgotPasswordScreen() {
               )}
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>E-mail</Text>
+                <Text style={styles.label}>{t("login.emailLabel")}</Text>
                 <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                   <TextInput
                     style={styles.input}
-                    placeholder="usuario@esports.gg"
+                    placeholder={t("login.emailPlaceholder")}
                     placeholderTextColor="#4B5563"
                     value={email}
                     onChangeText={setEmail}
@@ -114,10 +116,10 @@ export default function ForgotPasswordScreen() {
                 {loading ? (
                   <View style={styles.loadingRow}>
                     <ActivityIndicator size="small" color="#000" />
-                    <Text style={styles.submitButtonText}>Enviando...</Text>
+                    <Text style={styles.submitButtonText}>{t("forgotPassword.sending")}</Text>
                   </View>
                 ) : (
-                  <Text style={styles.submitButtonText}>Enviar link</Text>
+                  <Text style={styles.submitButtonText}>{t("forgotPassword.submitBtn")}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -125,7 +127,7 @@ export default function ForgotPasswordScreen() {
 
           {!sent && (
             <TouchableOpacity style={styles.loginRow} onPress={() => router.back()}>
-              <Text style={styles.loginText}>← Voltar para o login</Text>
+              <Text style={styles.loginText}>{t("forgotPassword.backToLoginLink")}</Text>
             </TouchableOpacity>
           )}
         </ScrollView>

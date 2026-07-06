@@ -1,5 +1,6 @@
 import { generateStarterPlayers } from "@/database/generateStarterPlayers";
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { router } from "expo-router";
 import { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function SetupTeamScreen() {
+  const { t } = useLanguage();
   const [teamName, setTeamName] = useState("");
   const [focused, setFocused] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -26,21 +28,21 @@ export default function SetupTeamScreen() {
     setError(null);
     const name = teamName.trim();
     if (!name) {
-      setError("Digite um nome para o seu time.");
+      setError(t("setup.errEmptyName"));
       return;
     }
     if (name.length < 2) {
-      setError("O nome deve ter pelo menos 2 caracteres.");
+      setError(t("setup.errTooShort"));
       return;
     }
     if (name.length > 32) {
-      setError("O nome deve ter no máximo 32 caracteres.");
+      setError(t("setup.errTooLong"));
       return;
     }
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setError("Sessão expirada. Faça login novamente.");
+      setError(t("setup.errSessionExpired"));
       setLoading(false);
       return;
     }
@@ -55,12 +57,12 @@ export default function SetupTeamScreen() {
       .single();
 
     if (upsertError || !teamData) {
-      setError("Erro ao salvar. Tente novamente.");
+      setError(t("setup.errSaveGeneric"));
       setLoading(false);
       return;
     }
 
-    await generateStarterPlayers(user.id, teamData.id);
+    await generateStarterPlayers();
     setLoading(false);
     router.replace("/dashboard");
   };
@@ -80,10 +82,10 @@ export default function SetupTeamScreen() {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.step}>PASSO 1 DE 1</Text>
-          <Text style={styles.title}>NOME DO SEU TIME</Text>
+          <Text style={styles.step}>{t("setup.step")}</Text>
+          <Text style={styles.title}>{t("setup.title")}</Text>
           <Text style={styles.subtitle}>
-            Escolha um nome épico — você poderá mudá-lo depois
+            {t("setup.subtitle")}
           </Text>
         </View>
 
@@ -94,7 +96,7 @@ export default function SetupTeamScreen() {
             </View>
           )}
 
-          <Text style={styles.label}>Nome do time</Text>
+          <Text style={styles.label}>{t("setup.label")}</Text>
           <View style={[styles.inputWrapper, focused && styles.inputFocused]}>
             <TextInput
               style={styles.input}
@@ -113,26 +115,26 @@ export default function SetupTeamScreen() {
           <Text style={styles.charCount}>{teamName.length}/32</Text>
 
           <View style={styles.statsPreview}>
-            <Text style={styles.statsPreviewTitle}>CONDIÇÕES INICIAIS</Text>
+            <Text style={styles.statsPreviewTitle}>{t("setup.initialConditions")}</Text>
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>$10K</Text>
-                <Text style={styles.statLabel}>Orçamento</Text>
+                <Text style={styles.statLabel}>{t("setup.budget")}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>—</Text>
-                <Text style={styles.statLabel}>Ranking</Text>
+                <Text style={styles.statLabel}>{t("setup.ranking")}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>0</Text>
-                <Text style={styles.statLabel}>Fãs</Text>
+                <Text style={styles.statLabel}>{t("setup.fans")}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statValue}>0-0</Text>
-                <Text style={styles.statLabel}>Recorde</Text>
+                <Text style={styles.statLabel}>{t("setup.record")}</Text>
               </View>
             </View>
           </View>
@@ -147,10 +149,10 @@ export default function SetupTeamScreen() {
           {loading ? (
             <View style={styles.loadingRow}>
               <ActivityIndicator size="small" color="#000" />
-              <Text style={styles.confirmButtonText}>Salvando...</Text>
+              <Text style={styles.confirmButtonText}>{t("setup.saving")}</Text>
             </View>
           ) : (
-            <Text style={styles.confirmButtonText}>ENTRAR NO JOGO  →</Text>
+            <Text style={styles.confirmButtonText}>{t("setup.confirmBtn")}</Text>
           )}
         </TouchableOpacity>
       </KeyboardAvoidingView>

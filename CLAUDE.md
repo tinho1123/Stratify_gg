@@ -67,6 +67,46 @@ npx expo start --web
 - Usar `supabase.auth` para operações de autenticação
 - Usar `supabase.from(...)` para queries de banco de dados
 
+## Segurança — Regra de Ouro do Modelo Supabase/RLS
+
+**O client (app) nunca é confiável.** Qualquer pessoa autenticada pode chamar a API REST do
+Supabase diretamente (com a `anon key` pública + o próprio JWT), ignorando completamente o
+código do app. Isso já causou uma vulnerabilidade real neste projeto (ver
+`database/migrations/017_fix_economy_access_control.sql`): o client calculava `budget`,
+`pdl`, `wins`, `losses`, `fans` e resultado de partida localmente e gravava direto via
+`supabase.from(...).update(...)`, e a policy de RLS só verificava o dono da linha — não
+quais colunas nem quais valores. Isso permitia economia infinita e leilões grátis.
+
+**Regras a seguir a partir de agora:**
+
+1. **Nunca escrever campos de economia/ranking direto do client.** Colunas como `budget`,
+   `pdl`, `fans`, `wins`, `losses`, `current_bid`, ou qualquer resultado de partida/leilão
+   devem ser alteradas **apenas** por funções `SECURITY DEFINER` (RPC via `supabase.rpc(...)`)
+   que validam e recalculam o valor no servidor — nunca por
+   `supabase.from("tabela").update({...})` vindo de um valor calculado no app.
+   Ver `resolve_match` e `place_bid` em `017_fix_economy_access_control.sql`,
+   e os padrões já existentes `buy_player_direct` (016) e `generate_next_match` (015).
+
+2. **Toda policy de RLS de `UPDATE`/`INSERT` precisa de `with check`, não só `using`.**
+   `using` controla quais linhas são visíveis/afetadas; sem `with check`, nada impede o
+   client de sobrescrever qualquer coluna daquela linha com qualquer valor. Ver
+   `database/migrations/013_create_tactics.sql` como referência do padrão correto
+   (`using` + `with check` idênticos, escopados por `team_id`).
+
+3. **Preferir `GRANT UPDATE (coluna1, coluna2) ON tabela TO authenticated`** (grant
+   column-level) em vez de liberar `UPDATE` na tabela inteira, quando só alguns campos
+   devem ser editáveis pelo client (ex.: `teams`: cliente só deve poder alterar `name` e
+   `onboarded`, nunca `budget`/`pdl`/`wins`/`losses`/`fans`).
+
+4. **Dados puramente cosméticos/de exibição** (ex.: estatísticas de K/D/A por jogador numa
+   partida, que só o próprio dono vê) podem continuar sendo calculados no client — não é
+   necessário mover tudo para o servidor, só o que afeta saldo, ranking ou outros usuários.
+
+5. **Antes de adicionar uma nova tabela ou coluna que o client escreve diretamente**,
+   perguntar: "o que impede um usuário malicioso de chamar a REST API do Supabase direto e
+   gravar qualquer valor nessa coluna, ignorando o app?". Se a resposta for "nada", a escrita
+   precisa passar por uma função `SECURITY DEFINER`.
+
 ## Notas Importantes
 
 - `newArchEnabled: true` — Nova arquitetura do React Native ativada

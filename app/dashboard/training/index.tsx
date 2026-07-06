@@ -1,6 +1,10 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAppAlert } from "@/components/ui/AppAlert";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
-import { router } from "expo-router";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useLanguage } from "@/i18n/LanguageContext";
+import { useFocusEffect } from "@react-navigation/native";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -19,91 +23,80 @@ const { width } = Dimensions.get("window");
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const TRAINING_DURATION_MS = 2 * 60 * 60 * 1000; // 2 horas
-const STORAGE_KEY = "stratify:active_training";
-
 interface Player {
   id: string;
   name: string;
   role: string;
   rating: number;
   status: "online" | "injured" | "banned";
+  energy: number;
+  training_type: string | null;
+  training_ends_at: string | null;
 }
 
 interface TrainingType {
   id: string;
-  name: string;
+  nameKey: string;
   icon: string;
-  description: string;
+  descKey: string;
   energyCost: number;
-  benefit: string;
+  benefitKey: string;
   color: string;
-}
-
-interface ActiveSession {
-  playerId: string;
-  playerName: string;
-  playerInitial: string;
-  trainingName: string;
-  trainingIcon: string;
-  trainingColor: string;
-  trainingBenefit: string;
-  endsAt: number; // timestamp ms
 }
 
 const TRAINING_TYPES: TrainingType[] = [
   {
-    id: "1",
-    name: "AIM TRAINING",
+    id: "aim",
+    nameKey: "training.type1Name",
     icon: "🎯",
-    description: "Treino intensivo de mira e precisão",
+    descKey: "training.type1Desc",
     energyCost: 20,
-    benefit: "+5 Precisão  +3 Reação",
+    benefitKey: "training.type1Benefit",
     color: "#EF4444",
   },
   {
-    id: "2",
-    name: "ESTRATÉGIA",
+    id: "strategy",
+    nameKey: "training.type2Name",
     icon: "🧠",
-    description: "Estudo de táticas e map control",
+    descKey: "training.type2Desc",
     energyCost: 15,
-    benefit: "+7 IQ de Jogo  +4 Comunicação",
+    benefitKey: "training.type2Benefit",
     color: "#3B82F6",
   },
   {
-    id: "3",
-    name: "CLUTCH TRAINING",
+    id: "clutch",
+    nameKey: "training.type3Name",
     icon: "⚡",
-    description: "Situações de pressão 1vX",
+    descKey: "training.type3Desc",
     energyCost: 25,
-    benefit: "+6 Mental  +5 Decisão",
+    benefitKey: "training.type3Benefit",
     color: "#F59E0B",
   },
   {
-    id: "4",
-    name: "SPRAY CONTROL",
+    id: "spray",
+    nameKey: "training.type4Name",
     icon: "🔫",
-    description: "Controle de recuo e spray patterns",
+    descKey: "training.type4Desc",
     energyCost: 18,
-    benefit: "+5 Controle  +4 Consistência",
+    benefitKey: "training.type4Benefit",
     color: "#8B5CF6",
   },
   {
-    id: "5",
-    name: "MOVIMENTO",
+    id: "movement",
+    nameKey: "training.type5Name",
     icon: "🏃",
-    description: "Peek, strafe e positioning",
+    descKey: "training.type5Desc",
     energyCost: 20,
-    benefit: "+6 Agilidade  +3 Positioning",
+    benefitKey: "training.type5Benefit",
     color: "#10B981",
   },
   {
-    id: "6",
-    name: "TEAM PRACTICE",
+    id: "team_practice",
+    nameKey: "training.type6Name",
     icon: "👥",
-    description: "Scrims e treino em equipe",
+    descKey: "training.type6Desc",
     energyCost: 30,
-    benefit: "+8 Sincronia  +6 Química",
+    benefitKey: "training.type6Benefit",
     color: "#EC4899",
   },
 ];
@@ -127,117 +120,121 @@ function formatCountdown(ms: number): string {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function TrainingScreen() {
+  const { t } = useLanguage();
+  const { isEnabled, loaded } = useFeatureFlags();
+
+  useEffect(() => {
+    if (loaded && !isEnabled("training")) router.replace("/dashboard");
+  }, [loaded]);
+  const { alert } = useAppAlert();
+  const params = useLocalSearchParams<{ playerId?: string }>();
+  const autoSelectedRef = useRef(false);
   const [players, setPlayers] = useState<Player[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(true);
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [pendingTraining, setPendingTraining] = useState<TrainingType | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
 
-  const [session, setSession] = useState<ActiveSession | null>(null);
-  const [remaining, setRemaining] = useState(0);
-  const [justFinished, setJustFinished] = useState(false);
-
+  const [, setTick] = useState(0);
+  const claimedRef = useRef(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Load persisted session ────────────────────────────────────────────────
+  // ── Fetch ──────────────────────────────────────────────────────────────────
+  const fetchData = useCallback(async () => {
+    setLoadingPlayers(true);
+    // Aplica bônus de qualquer treino já concluído (e regenera energia) e libera quem já
+    // cumpriu o prazo de lesão — antes de mostrar o elenco, senão a tela ficaria desatualizada.
+    await Promise.all([
+      supabase.rpc("claim_completed_training"),
+      supabase.rpc("check_recovered_players"),
+    ]);
 
-  const loadSession = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (!raw) return;
-      const saved: ActiveSession = JSON.parse(raw);
-      const rem = saved.endsAt - Date.now();
-      if (rem <= 0) {
-        await AsyncStorage.removeItem(STORAGE_KEY);
-        return;
-      }
-      setSession(saved);
-      setRemaining(rem);
-    } catch {}
+    const { data: team } = await supabase.from("teams").select("id").single();
+    if (!team) { setLoadingPlayers(false); return; }
+
+    const { data, error } = await supabase
+      .from("players")
+      .select("id, name, role, rating, status, energy, training_type, training_ends_at")
+      .eq("team_id", team.id);
+    if (!error && data) setPlayers(data as Player[]);
+    setLoadingPlayers(false);
   }, []);
 
-  // ── Countdown tick ────────────────────────────────────────────────────────
+  // Recarrega sempre que a tela ganha foco (cobre voltar de outra tela sem desmontar).
+  useFocusEffect(useCallback(() => { claimedRef.current = false; fetchData(); }, [fetchData]));
 
+  const session = players.find((p) => p.training_ends_at) ?? null;
+  const remaining = session ? new Date(session.training_ends_at as string).getTime() - Date.now() : 0;
+
+  // Veio de "TREINAR" no modal de um jogador (Gerenciar Time) — pré-seleciona ele aqui.
+  useEffect(() => {
+    if (autoSelectedRef.current || !params.playerId || players.length === 0) return;
+    autoSelectedRef.current = true;
+    const match = players.find((p) => p.id === params.playerId);
+    if (match && match.status === "online" && !session) {
+      setSelectedPlayer(match);
+    }
+  }, [params.playerId, players, session]);
+
+  // ── Countdown tick ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!session) return;
-
     tickRef.current = setInterval(() => {
-      const rem = session.endsAt - Date.now();
-      if (rem <= 0) {
-        clearInterval(tickRef.current!);
-        setSession(null);
-        setRemaining(0);
-        AsyncStorage.removeItem(STORAGE_KEY);
-        setJustFinished(true);
-        setTimeout(() => setJustFinished(false), 3000);
+      const rem = new Date(session.training_ends_at as string).getTime() - Date.now();
+      if (rem <= 0 && !claimedRef.current) {
+        claimedRef.current = true;
+        fetchData();
       } else {
-        setRemaining(rem);
+        setTick((v) => v + 1);
       }
     }, 1000);
-
-    return () => {
-      if (tickRef.current) clearInterval(tickRef.current);
-    };
-  }, [session]);
-
-  // ── Load players ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    loadSession();
-
-    supabase
-      .from("teams")
-      .select("id")
-      .single()
-      .then(({ data: team }) => {
-        if (!team) { setLoadingPlayers(false); return; }
-        supabase
-          .from("players")
-          .select("id, name, role, rating, status")
-          .eq("team_id", team.id)
-          .then(({ data, error }) => {
-            if (!error && data) setPlayers(data as Player[]);
-            setLoadingPlayers(false);
-          });
-      });
-  }, [loadSession]);
+    return () => { if (tickRef.current) clearInterval(tickRef.current); };
+  }, [session, fetchData]);
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
-  const handleTrainingPress = (t: TrainingType) => {
+  const handleTrainingPress = (tr: TrainingType) => {
     if (!selectedPlayer || session) return;
-    setPendingTraining(t);
+    if (selectedPlayer.energy < tr.energyCost) {
+      alert(t("common.error"), t("training.errInsufficientEnergy"));
+      return;
+    }
+    setPendingTraining(tr);
     setConfirmOpen(true);
   };
 
   const startTraining = async () => {
     if (!selectedPlayer || !pendingTraining) return;
+    setStarting(true);
+    const { error } = await supabase.rpc("start_training", {
+      p_player_id:     selectedPlayer.id,
+      p_training_type: pendingTraining.id,
+    });
+    setStarting(false);
+
+    if (error) {
+      const msg = error.message?.includes("team_already_training")
+        ? t("training.errTeamTraining")
+        : error.message?.includes("insufficient_energy")
+        ? t("training.errInsufficientEnergy")
+        : error.message?.includes("player_unavailable")
+        ? t("training.errPlayerUnavailable")
+        : t("training.errGeneric");
+      alert(t("common.error"), msg);
+      return;
+    }
+
     setConfirmOpen(false);
-
-    const newSession: ActiveSession = {
-      playerId: selectedPlayer.id,
-      playerName: selectedPlayer.name,
-      playerInitial: selectedPlayer.name[0],
-      trainingName: pendingTraining.name,
-      trainingIcon: pendingTraining.icon,
-      trainingColor: pendingTraining.color,
-      trainingBenefit: pendingTraining.benefit,
-      endsAt: Date.now() + TRAINING_DURATION_MS,
-    };
-
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newSession));
-    setSession(newSession);
-    setRemaining(TRAINING_DURATION_MS);
     setSelectedPlayer(null);
     setPendingTraining(null);
+    fetchData();
   };
 
-  const cancelTraining = async () => {
-    await AsyncStorage.removeItem(STORAGE_KEY);
-    if (tickRef.current) clearInterval(tickRef.current);
-    setSession(null);
-    setRemaining(0);
+  const cancelTraining = async (playerId: string) => {
+    await supabase.rpc("cancel_training", { p_player_id: playerId });
+    fetchData();
   };
 
   const isLocked = !!session;
@@ -247,66 +244,49 @@ export default function TrainingScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
 
-      {/* ── HEADER ───────────────────────────────────── */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backIcon}>‹</Text>
-        </TouchableOpacity>
-        <View style={styles.headerCenter}>
-          <View style={styles.headerDot} />
-          <Text style={styles.headerTitle}>TREINAMENTO</Text>
-        </View>
-        <View style={{ width: 36 }} />
-      </View>
+      <ScreenHeader title={t("training.headerTitle")} dotColor="#10B981" />
 
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
 
         {/* ── SESSÃO ATIVA ─────────────────────────────── */}
-        {session && (
-          <View style={[styles.sessionBanner, { borderColor: session.trainingColor + "55" }]}>
-            <View style={[styles.sessionIconWrap, { backgroundColor: session.trainingColor + "18" }]}>
-              <Text style={styles.sessionIcon}>{session.trainingIcon}</Text>
-            </View>
-
-            <View style={styles.sessionInfo}>
-              <View style={styles.sessionTopRow}>
-                <View style={[styles.sessionDot, { backgroundColor: session.trainingColor }]} />
-                <Text style={[styles.sessionLabel, { color: session.trainingColor }]}>
-                  EM TREINAMENTO
-                </Text>
+        {session && (() => {
+          const tr = TRAINING_TYPES.find((x) => x.id === session.training_type);
+          const color = tr?.color ?? "#10B981";
+          return (
+            <View style={[styles.sessionBanner, { borderColor: color + "55" }]}>
+              <View style={[styles.sessionIconWrap, { backgroundColor: color + "18" }]}>
+                <Text style={styles.sessionIcon}>{tr?.icon ?? "🏋️"}</Text>
               </View>
-              <Text style={styles.sessionPlayer}>{session.playerName}</Text>
-              <Text style={styles.sessionType}>{session.trainingName}</Text>
-            </View>
 
-            <View style={styles.sessionTimer}>
-              <Text style={styles.sessionTimerLabel}>RESTANTE</Text>
-              <Text style={[styles.sessionTimerValue, { color: session.trainingColor }]}>
-                {formatCountdown(remaining)}
-              </Text>
-              <TouchableOpacity onPress={cancelTraining} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>cancelar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
+              <View style={styles.sessionInfo}>
+                <View style={styles.sessionTopRow}>
+                  <View style={[styles.sessionDot, { backgroundColor: color }]} />
+                  <Text style={[styles.sessionLabel, { color }]}>
+                    {t("training.statusTraining")}
+                  </Text>
+                </View>
+                <Text style={styles.sessionPlayer}>{session.name}</Text>
+                <Text style={styles.sessionType}>{tr ? t(tr.nameKey) : ""}</Text>
+              </View>
 
-        {/* ── TREINO CONCLUÍDO ─────────────────────────── */}
-        {justFinished && (
-          <View style={styles.finishedBanner}>
-            <Text style={styles.finishedIcon}>🎉</Text>
-            <View>
-              <Text style={styles.finishedTitle}>TREINO CONCLUÍDO!</Text>
-              <Text style={styles.finishedSub}>Jogador disponível para novo treino</Text>
+              <View style={styles.sessionTimer}>
+                <Text style={styles.sessionTimerLabel}>{t("training.remaining")}</Text>
+                <Text style={[styles.sessionTimerValue, { color }]}>
+                  {formatCountdown(remaining)}
+                </Text>
+                <TouchableOpacity onPress={() => cancelTraining(session.id)} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>{t("training.cancelLink")}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        )}
+          );
+        })()}
 
         {/* ── LOCK INFO ────────────────────────────────── */}
         {isLocked && (
           <View style={styles.lockInfo}>
             <Text style={styles.lockInfoText}>
-              Aguarde o fim do treino para iniciar um novo
+              {t("training.lockInfo")}
             </Text>
           </View>
         )}
@@ -315,11 +295,11 @@ export default function TrainingScreen() {
         <View style={styles.section}>
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>
-              {isLocked ? "JOGADORES" : "SELECIONAR JOGADOR"}
+              {isLocked ? t("training.playersTitle") : t("training.selectPlayerTitle")}
             </Text>
             {selectedPlayer && !isLocked && (
               <TouchableOpacity onPress={() => setSelectedPlayer(null)}>
-                <Text style={styles.sectionLink}>limpar</Text>
+                <Text style={styles.sectionLink}>{t("training.clearLink")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -330,16 +310,18 @@ export default function TrainingScreen() {
             </View>
           ) : players.length === 0 ? (
             <View style={styles.centered}>
-              <Text style={styles.emptyText}>Nenhum jogador no time</Text>
+              <Text style={styles.emptyText}>{t("training.emptyTeam")}</Text>
             </View>
           ) : (
             <View style={styles.playersGrid}>
               {players.map((p) => {
-                const isTraining = session?.playerId === p.id;
+                const isTraining = session?.id === p.id;
                 const isInjured = p.status === "injured";
                 const isSelected = selectedPlayer?.id === p.id;
                 // Blocked: locked by another player's session, or injured
                 const isBlocked = (isLocked && !isTraining) || isInjured;
+                const tr = isTraining ? TRAINING_TYPES.find((x) => x.id === p.training_type) : undefined;
+                const trainColor = tr?.color ?? "#10B981";
 
                 return (
                   <TouchableOpacity
@@ -350,7 +332,7 @@ export default function TrainingScreen() {
                     style={[
                       styles.playerCard,
                       isSelected && styles.playerCardSelected,
-                      isTraining && { borderColor: session!.trainingColor, backgroundColor: session!.trainingColor + "0A" },
+                      isTraining && { borderColor: trainColor, backgroundColor: trainColor + "0A" },
                       isBlocked && styles.playerCardBlocked,
                     ]}
                   >
@@ -360,14 +342,14 @@ export default function TrainingScreen() {
                       </View>
                     )}
                     {isTraining && (
-                      <View style={[styles.checkBadge, { backgroundColor: session!.trainingColor }]}>
+                      <View style={[styles.checkBadge, { backgroundColor: trainColor }]}>
                         <Text style={styles.checkBadgeText}>▶</Text>
                       </View>
                     )}
 
                     <View style={[
                       styles.playerAvatar,
-                      isTraining && { borderColor: session!.trainingColor + "88" },
+                      isTraining && { borderColor: trainColor + "88" },
                     ]}>
                       <Text style={styles.playerAvatarText}>{p.name[0]}</Text>
                     </View>
@@ -379,21 +361,21 @@ export default function TrainingScreen() {
                     </Text>
                     <Text style={styles.playerRole}>{p.role}</Text>
                     {isTraining ? (
-                      <Text style={[styles.trainingCountdown, { color: session!.trainingColor }]}>
+                      <Text style={[styles.trainingCountdown, { color: trainColor }]}>
                         {formatCountdown(remaining)}
                       </Text>
                     ) : (
                       <View style={styles.ratingRow}>
-                        <Text style={styles.ratingLabel}>RTG</Text>
-                        <Text style={[styles.ratingValue, { color: getRatingColor(p.rating) }]}>
-                          {p.rating}
+                        <Text style={styles.ratingLabel}>⚡</Text>
+                        <Text style={[styles.ratingValue, { color: p.energy >= 50 ? "#10B981" : p.energy >= 25 ? "#F59E0B" : "#EF4444" }]}>
+                          {p.energy}
                         </Text>
                       </View>
                     )}
 
                     {isInjured && (
                       <View style={styles.blockedOverlay}>
-                        <Text style={styles.blockedOverlayText}>LESÃO</Text>
+                        <Text style={styles.blockedOverlayText}>{t("training.injuredOverlay")}</Text>
                       </View>
                     )}
                     {isLocked && !isTraining && !isInjured && (
@@ -411,43 +393,46 @@ export default function TrainingScreen() {
         {/* ── TIPOS DE TREINO ───────────────────────── */}
         <View style={styles.section}>
           <View style={styles.sectionRow}>
-            <Text style={styles.sectionTitle}>TIPOS DE TREINO</Text>
+            <Text style={styles.sectionTitle}>{t("training.trainingTypesTitle")}</Text>
             {!isLocked && !selectedPlayer && (
-              <Text style={styles.sectionHint}>selecione um jogador primeiro</Text>
+              <Text style={styles.sectionHint}>{t("training.selectPlayerFirst")}</Text>
             )}
           </View>
 
-          {TRAINING_TYPES.map((t) => {
+          {TRAINING_TYPES.map((tr) => {
             const disabled = !selectedPlayer || isLocked;
+            const cantAfford = !!selectedPlayer && selectedPlayer.energy < tr.energyCost;
             return (
               <TouchableOpacity
-                key={t.id}
+                key={tr.id}
                 activeOpacity={disabled ? 1 : 0.75}
                 disabled={disabled}
-                onPress={() => handleTrainingPress(t)}
+                onPress={() => handleTrainingPress(tr)}
                 style={[styles.trainingCard, disabled && styles.trainingCardDisabled]}
               >
-                <View style={[styles.trainingAccent, { backgroundColor: disabled ? "#1F1F1F" : t.color }]} />
+                <View style={[styles.trainingAccent, { backgroundColor: disabled ? "#1F1F1F" : tr.color }]} />
                 <View style={styles.trainingLeft}>
-                  <View style={[styles.trainingIconWrap, { backgroundColor: disabled ? "#111" : t.color + "18" }]}>
-                    <Text style={styles.trainingIcon}>{t.icon}</Text>
+                  <View style={[styles.trainingIconWrap, { backgroundColor: disabled ? "#111" : tr.color + "18" }]}>
+                    <Text style={styles.trainingIcon}>{tr.icon}</Text>
                   </View>
                   <View style={styles.trainingInfo}>
                     <Text style={[styles.trainingName, disabled && { color: "#4B5563" }]}>
-                      {t.name}
+                      {t(tr.nameKey)}
                     </Text>
-                    <Text style={styles.trainingDesc}>{t.description}</Text>
+                    <Text style={styles.trainingDesc}>{t(tr.descKey)}</Text>
                     {!disabled && (
-                      <View style={[styles.benefitPill, { backgroundColor: t.color + "18" }]}>
-                        <Text style={[styles.benefitText, { color: t.color }]}>
-                          📈 {t.benefit}
+                      <View style={[styles.benefitPill, { backgroundColor: tr.color + "18" }]}>
+                        <Text style={[styles.benefitText, { color: tr.color }]}>
+                          📈 {t(tr.benefitKey)}
                         </Text>
                       </View>
                     )}
                   </View>
                 </View>
                 <View style={styles.trainingRight}>
-                  <Text style={styles.trainingDuration}>2h</Text>
+                  <Text style={[styles.trainingDuration, cantAfford && { color: "#EF4444" }]}>
+                    ⚡{tr.energyCost}
+                  </Text>
                   <Text style={[styles.trainingChevron, disabled && { color: "#1F1F1F" }]}>›</Text>
                 </View>
               </TouchableOpacity>
@@ -465,7 +450,7 @@ export default function TrainingScreen() {
         animationType="slide"
         onRequestClose={() => setConfirmOpen(false)}
       >
-        <Pressable style={styles.overlay} onPress={() => setConfirmOpen(false)}>
+        <Pressable style={styles.overlay} onPress={() => !starting && setConfirmOpen(false)}>
           <Pressable style={styles.sheet} onPress={() => {}}>
             <View style={styles.sheetHandle} />
 
@@ -476,14 +461,14 @@ export default function TrainingScreen() {
                     <Text style={styles.sheetIcon}>{pendingTraining.icon}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.sheetTitle}>{pendingTraining.name}</Text>
-                    <Text style={styles.sheetDesc}>{pendingTraining.description}</Text>
+                    <Text style={styles.sheetTitle}>{t(pendingTraining.nameKey)}</Text>
+                    <Text style={styles.sheetDesc}>{t(pendingTraining.descKey)}</Text>
                   </View>
                 </View>
 
                 <View style={styles.sheetDivider} />
 
-                <Text style={styles.sheetLabel}>JOGADOR</Text>
+                <Text style={styles.sheetLabel}>{t("training.playerLabel")}</Text>
                 <View style={styles.sheetPlayerRow}>
                   <View style={styles.sheetPlayerAvatar}>
                     <Text style={styles.sheetPlayerAvatarText}>{selectedPlayer.name[0]}</Text>
@@ -502,23 +487,25 @@ export default function TrainingScreen() {
                 <View style={styles.sheetDivider} />
 
                 <View style={styles.sheetSummaryRow}>
-                  <Text style={styles.sheetSummaryLabel}>Duração</Text>
-                  <Text style={styles.sheetSummaryValue}>2 horas</Text>
+                  <Text style={styles.sheetSummaryLabel}>{t("training.confirmDuration")}</Text>
+                  <Text style={styles.sheetSummaryValue}>{t("training.confirmDurationValue")}</Text>
                 </View>
                 <View style={styles.sheetSummaryRow}>
-                  <Text style={styles.sheetSummaryLabel}>Custo de energia</Text>
-                  <Text style={styles.sheetSummaryValue}>{pendingTraining.energyCost} EP</Text>
+                  <Text style={styles.sheetSummaryLabel}>{t("training.confirmEnergyCost")}</Text>
+                  <Text style={styles.sheetSummaryValue}>
+                    {pendingTraining.energyCost} {t("training.energyUnit")} ({selectedPlayer.energy} → {selectedPlayer.energy - pendingTraining.energyCost})
+                  </Text>
                 </View>
                 <View style={styles.sheetSummaryRow}>
-                  <Text style={styles.sheetSummaryLabel}>Benefício</Text>
+                  <Text style={styles.sheetSummaryLabel}>{t("training.confirmBenefit")}</Text>
                   <Text style={[styles.sheetSummaryValue, { color: pendingTraining.color }]}>
-                    {pendingTraining.benefit}
+                    {t(pendingTraining.benefitKey)}
                   </Text>
                 </View>
 
                 <View style={styles.sheetNote}>
                   <Text style={styles.sheetNoteText}>
-                    🔒 Nenhum outro jogador poderá treinar durante este período
+                    {t("training.confirmNote")}
                   </Text>
                 </View>
 
@@ -526,14 +513,18 @@ export default function TrainingScreen() {
                   <TouchableOpacity
                     style={styles.btnCancel}
                     onPress={() => setConfirmOpen(false)}
+                    disabled={starting}
                   >
-                    <Text style={styles.btnCancelText}>CANCELAR</Text>
+                    <Text style={styles.btnCancelText}>{t("training.cancelBtn")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.btnConfirm, { backgroundColor: pendingTraining.color }]}
+                    style={[styles.btnConfirm, { backgroundColor: pendingTraining.color }, starting && { opacity: 0.6 }]}
                     onPress={startTraining}
+                    disabled={starting}
                   >
-                    <Text style={styles.btnConfirmText}>INICIAR  ▶</Text>
+                    {starting
+                      ? <ActivityIndicator size="small" color="#000" />
+                      : <Text style={styles.btnConfirmText}>{t("training.startBtn")}</Text>}
                   </TouchableOpacity>
                 </View>
               </>
@@ -552,20 +543,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#080808" },
 
   // Header
-  header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
-    justifyContent: "center", alignItems: "center",
-  },
-  backIcon: { fontSize: 22, color: "#FFFFFF", lineHeight: 24, marginTop: -2 },
-  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
-  headerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#10B981" },
-  headerTitle: { fontSize: 16, fontWeight: "900", color: "#FFFFFF", letterSpacing: 4 },
-
   // Active session banner
   sessionBanner: {
     flexDirection: "row",
@@ -594,18 +571,6 @@ const styles = StyleSheet.create({
   sessionTimerValue: { fontSize: 18, fontWeight: "900", letterSpacing: 1 },
   cancelBtn: { marginTop: 4 },
   cancelBtnText: { fontSize: 10, color: "#4B5563", fontWeight: "600" },
-
-  // Finished banner
-  finishedBanner: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    marginHorizontal: 16, marginBottom: 4,
-    backgroundColor: "rgba(16,185,129,0.08)",
-    borderWidth: 1, borderColor: "rgba(16,185,129,0.25)",
-    borderRadius: 12, padding: 14,
-  },
-  finishedIcon: { fontSize: 28 },
-  finishedTitle: { fontSize: 13, fontWeight: "900", color: "#10B981", letterSpacing: 1 },
-  finishedSub: { fontSize: 11, color: "#6B7280", marginTop: 2 },
 
   // Lock info
   lockInfo: {

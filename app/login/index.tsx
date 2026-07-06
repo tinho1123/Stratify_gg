@@ -1,4 +1,5 @@
 import { supabase } from "@/database/supabase";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
+  const { t } = useLanguage();
   const [email, setEmail] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [showPassword, setShowPassword] = useState<boolean>(false);
@@ -28,7 +30,7 @@ export default function LoginScreen() {
   const handleLogin = async (): Promise<void> => {
     setError(null);
     if (!email || !password) {
-      setError("Preencha e-mail e senha.");
+      setError(t("login.errorFillFields"));
       return;
     }
     setLoading(true);
@@ -36,9 +38,9 @@ export default function LoginScreen() {
     setLoading(false);
     if (loginError) {
       if (loginError.message.toLowerCase().includes("email not confirmed")) {
-        setError("Confirme seu e-mail antes de fazer login. Verifique sua caixa de entrada.");
+        setError(t("login.errorEmailNotConfirmed"));
       } else {
-        setError("E-mail ou senha inválidos.");
+        setError(t("login.errorInvalidCredentials"));
       }
       return;
     }
@@ -68,18 +70,18 @@ export default function LoginScreen() {
               resizeMode="contain"
             />
             <Text style={styles.title}>STRATIFY</Text>
-            <Text style={styles.subtitle}>Gerencie seu time. Conquiste o topo.</Text>
+            <Text style={styles.subtitle}>{t("login.subtitle")}</Text>
           </View>
 
           {/* Form */}
           <View style={styles.form}>
             {/* E-mail */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>E-mail</Text>
+              <Text style={styles.label}>{t("login.emailLabel")}</Text>
               <View style={[styles.inputWrapper, emailFocused && styles.inputFocused]}>
                 <TextInput
                   style={styles.input}
-                  placeholder="usuario@esports.gg"
+                  placeholder={t("login.emailPlaceholder")}
                   placeholderTextColor="#4B5563"
                   value={email}
                   onChangeText={setEmail}
@@ -93,7 +95,7 @@ export default function LoginScreen() {
 
             {/* Senha */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Senha</Text>
+              <Text style={styles.label}>{t("login.passwordLabel")}</Text>
               <View style={[styles.inputWrapper, passwordFocused && styles.inputFocused]}>
                 <TextInput
                   style={styles.input}
@@ -119,7 +121,7 @@ export default function LoginScreen() {
               style={styles.forgotRow}
               onPress={() => router.push("/login/forgot-password")}
             >
-              <Text style={styles.forgotText}>Esqueceu a senha?</Text>
+              <Text style={styles.forgotText}>{t("login.forgotPassword")}</Text>
             </TouchableOpacity>
 
             {/* Error */}
@@ -139,19 +141,19 @@ export default function LoginScreen() {
               {loading ? (
                 <View style={styles.loadingRow}>
                   <ActivityIndicator size="small" color="#000" />
-                  <Text style={styles.loginButtonText}>Entrando...</Text>
+                  <Text style={styles.loginButtonText}>{t("login.loggingIn")}</Text>
                 </View>
               ) : (
-                <Text style={styles.loginButtonText}>Entrar</Text>
+                <Text style={styles.loginButtonText}>{t("login.loginButton")}</Text>
               )}
             </TouchableOpacity>
           </View>
 
           {/* Footer */}
           <View style={styles.signupRow}>
-            <Text style={styles.signupText}>Não tem conta? </Text>
+            <Text style={styles.signupText}>{t("login.noAccount")}</Text>
             <TouchableOpacity onPress={() => router.push("/login/signup")}>
-              <Text style={styles.signupLink}>Criar time</Text>
+              <Text style={styles.signupLink}>{t("login.createTeam")}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

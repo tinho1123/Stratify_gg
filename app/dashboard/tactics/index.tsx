@@ -1,4 +1,7 @@
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
+import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { useLanguage } from "@/i18n/LanguageContext";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -70,31 +73,31 @@ const MAPS = [
 ];
 
 const GAME_STYLES: {
-  key: GameStyle; label: string; icon: string; desc: string; color: string;
+  key: GameStyle; labelKey: string; icon: string; descKey: string; color: string;
 }[] = [
   {
-    key: "agressivo",  label: "Agressivo",  icon: "⚡",
-    desc: "Entradas rápidas, peeking constante, eco agressivo",
+    key: "agressivo",  labelKey: "tactics.styleAggressiveLabel",  icon: "⚡",
+    descKey: "tactics.styleAggressiveDesc",
     color: "#EF4444",
   },
   {
-    key: "adaptativo", label: "Adaptativo", icon: "⚖️",
-    desc: "Flexível, reage ao adversário, equilíbrio ataque/defesa",
+    key: "adaptativo", labelKey: "tactics.styleAdaptiveLabel", icon: "⚖️",
+    descKey: "tactics.styleAdaptiveDesc",
     color: "#6366F1",
   },
   {
-    key: "controlado", label: "Controlado", icon: "🎯",
-    desc: "Jogo lento, utility setup completo, informação primeiro",
+    key: "controlado", labelKey: "tactics.styleControlledLabel", icon: "🎯",
+    descKey: "tactics.styleControlledDesc",
     color: "#10B981",
   },
 ];
 
 const ECO_OPTIONS: {
-  key: EcoStrategy; label: string; icon: string; desc: string;
+  key: EcoStrategy; labelKey: string; icon: string; descKey: string;
 }[] = [
-  { key: "economico",  label: "Econômico",  icon: "💰", desc: "Saves frequentes, full buys decisivos" },
-  { key: "balanceado", label: "Balanceado", icon: "⚖️", desc: "Avalia o banco a cada round" },
-  { key: "full_buy",   label: "Full Buy",   icon: "🛡️", desc: "Compra máxima sempre que possível" },
+  { key: "economico",  labelKey: "tactics.ecoEconomicLabel",  icon: "💰", descKey: "tactics.ecoEconomicDesc" },
+  { key: "balanceado", labelKey: "tactics.ecoBalancedLabel", icon: "⚖️", descKey: "tactics.ecoBalancedDesc" },
+  { key: "full_buy",   labelKey: "tactics.ecoFullBuyLabel",   icon: "🛡️", descKey: "tactics.ecoFullBuyDesc" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -113,6 +116,12 @@ function fitDots(score: number): { filled: number; color: string } {
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function TacticsScreen() {
+  const { t } = useLanguage();
+  const { isEnabled, loaded } = useFeatureFlags();
+
+  useEffect(() => {
+    if (loaded && !isEnabled("tactics")) router.replace("/dashboard");
+  }, [loaded]);
   const [teamId,  setTeamId]  = useState<string | null>(null);
   const [players, setPlayers] = useState<TacticalPlayer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -206,30 +215,26 @@ export default function TacticsScreen() {
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
 
-      {/* ── HEADER ─────────────────────────────────────── */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Text style={s.backIcon}>‹</Text>
-        </TouchableOpacity>
-        <View style={s.headerCenter}>
-          <View style={s.headerDot} />
-          <Text style={s.headerTitle}>TÁTICAS</Text>
-        </View>
-        <TouchableOpacity
-          style={[s.saveBtn, saved && s.saveBtnDone, saving && { opacity: 0.6 }]}
-          onPress={saveTactics}
-          disabled={saving || loading}
-        >
-          {saving
-            ? <ActivityIndicator size="small" color="#FFF" />
-            : <Text style={s.saveBtnText}>{saved ? "✓ SALVO" : "SALVAR"}</Text>}
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title={t("tactics.headerTitle")}
+        dotColor="#6366F1"
+        right={
+          <TouchableOpacity
+            style={[s.saveBtn, saved && s.saveBtnDone, saving && { opacity: 0.6 }]}
+            onPress={saveTactics}
+            disabled={saving || loading}
+          >
+            {saving
+              ? <ActivityIndicator size="small" color="#FFF" />
+              : <Text style={s.saveBtnText}>{saved ? t("tactics.savedBtn") : t("tactics.saveBtn")}</Text>}
+          </TouchableOpacity>
+        }
+      />
 
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator size="large" color="#6366F1" />
-          <Text style={s.loadingText}>Carregando...</Text>
+          <Text style={s.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : (
         <ScrollView
@@ -243,13 +248,13 @@ export default function TacticsScreen() {
           ══════════════════════════════════════════════ */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>ESCALAÇÃO TÁTICA</Text>
-              <Text style={s.sectionSub}>Atribua funções para cada jogador</Text>
+              <Text style={s.sectionTitle}>{t("tactics.lineupTitle")}</Text>
+              <Text style={s.sectionSub}>{t("tactics.lineupSub")}</Text>
             </View>
 
             {players.length === 0 ? (
               <View style={s.emptyCard}>
-                <Text style={s.emptyText}>Nenhum jogador no elenco</Text>
+                <Text style={s.emptyText}>{t("tactics.emptyRoster")}</Text>
               </View>
             ) : (
               players.map((player) => {
@@ -274,12 +279,12 @@ export default function TacticsScreen() {
                           <Text style={s.playerName}>{player.name}</Text>
                           {isOff && (
                             <View style={s.adaptBadge}>
-                              <Text style={s.adaptText}>FORA DA POSIÇÃO</Text>
+                              <Text style={s.adaptText}>{t("tactics.outOfPosition")}</Text>
                             </View>
                           )}
                         </View>
                         <Text style={s.playerNatRole}>
-                          Natural: <Text style={{ color: ROLE_COLOR[player.naturalRole] }}>
+                          {t("tactics.naturalLabel")} <Text style={{ color: ROLE_COLOR[player.naturalRole] }}>
                             {player.naturalRole}
                           </Text>
                         </Text>
@@ -287,7 +292,7 @@ export default function TacticsScreen() {
 
                       {/* Fit indicator */}
                       <View style={s.fitBox}>
-                        <Text style={s.fitLabel}>FIT</Text>
+                        <Text style={s.fitLabel}>{t("tactics.fitLabel")}</Text>
                         <View style={s.fitDots}>
                           {[1, 2, 3, 4, 5].map((i) => (
                             <View
@@ -338,8 +343,8 @@ export default function TacticsScreen() {
           ══════════════════════════════════════════════ */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>ESTILO DE JOGO</Text>
-              <Text style={s.sectionSub}>Como o time aborda cada partida</Text>
+              <Text style={s.sectionTitle}>{t("tactics.styleTitle")}</Text>
+              <Text style={s.sectionSub}>{t("tactics.styleSub")}</Text>
             </View>
 
             <View style={s.styleGrid}>
@@ -361,9 +366,9 @@ export default function TacticsScreen() {
                     {active && <View style={[s.styleActiveBar, { backgroundColor: gs.color }]} />}
                     <Text style={s.styleIcon}>{gs.icon}</Text>
                     <Text style={[s.styleLabel, active && { color: gs.color }]}>
-                      {gs.label}
+                      {t(gs.labelKey)}
                     </Text>
-                    <Text style={s.styleDesc}>{gs.desc}</Text>
+                    <Text style={s.styleDesc}>{t(gs.descKey)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -376,8 +381,8 @@ export default function TacticsScreen() {
           <View style={s.section}>
             <View style={s.sectionHeaderRow}>
               <View style={s.sectionHeader}>
-                <Text style={s.sectionTitle}>POOL DE MAPAS</Text>
-                <Text style={s.sectionSub}>Mapas que seu time domina</Text>
+                <Text style={s.sectionTitle}>{t("tactics.mapPoolTitle")}</Text>
+                <Text style={s.sectionSub}>{t("tactics.mapPoolSub")}</Text>
               </View>
               <View style={s.poolBadge}>
                 <Text style={s.poolBadgeText}>{mapPool.length}/7</Text>
@@ -422,8 +427,8 @@ export default function TacticsScreen() {
           ══════════════════════════════════════════════ */}
           <View style={s.section}>
             <View style={s.sectionHeader}>
-              <Text style={s.sectionTitle}>ESTRATÉGIA DE ECONOMIA</Text>
-              <Text style={s.sectionSub}>Como gerenciar o orçamento em jogo</Text>
+              <Text style={s.sectionTitle}>{t("tactics.ecoTitle")}</Text>
+              <Text style={s.sectionSub}>{t("tactics.ecoSub")}</Text>
             </View>
 
             <View style={s.ecoRow}>
@@ -438,9 +443,9 @@ export default function TacticsScreen() {
                   >
                     <Text style={s.ecoIcon}>{opt.icon}</Text>
                     <Text style={[s.ecoLabel, active && s.ecoLabelActive]}>
-                      {opt.label}
+                      {t(opt.labelKey)}
                     </Text>
-                    <Text style={s.ecoDesc}>{opt.desc}</Text>
+                    <Text style={s.ecoDesc}>{t(opt.descKey)}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -464,19 +469,6 @@ const s = StyleSheet.create({
   loadingText: { fontSize: 13, color: "#6B7280" },
 
   // Header
-  header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
-    justifyContent: "center", alignItems: "center",
-  },
-  backIcon: { fontSize: 22, color: "#FFFFFF", lineHeight: 24, marginTop: -2 },
-  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
-  headerDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#6366F1" },
-  headerTitle: { fontSize: 16, fontWeight: "900", color: "#FFFFFF", letterSpacing: 4 },
   saveBtn: {
     paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8,
     backgroundColor: "#6366F1", minWidth: 72, alignItems: "center",

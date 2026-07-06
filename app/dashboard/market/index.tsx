@@ -1,5 +1,7 @@
+import { RewardedAdButton } from "@/components/ui/RewardedAdButton";
+import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
-import { router } from "expo-router";
+import { useLanguage } from "@/i18n/LanguageContext";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -84,9 +86,9 @@ function fmtPrice(v: number) {
   return `$${v}`;
 }
 
-function fmtCountdown(endsAt: string): { text: string; urgent: boolean } {
+function fmtCountdown(endsAt: string, closedLabel: string): { text: string; urgent: boolean } {
   const diff = new Date(endsAt).getTime() - Date.now();
-  if (diff <= 0) return { text: "ENCERRADO", urgent: true };
+  if (diff <= 0) return { text: closedLabel, urgent: true };
   const h = Math.floor(diff / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
   const s = Math.floor((diff % 60_000) / 1_000);
@@ -98,6 +100,7 @@ function fmtCountdown(endsAt: string): { text: string; urgent: boolean } {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function MarketScreen() {
+  const { t } = useLanguage();
   const [myTeamId, setMyTeamId]   = useState<string | null>(null);
   const [budget,   setBudget]     = useState<number | null>(null);
   const [listings, setListings]   = useState<Listing[]>([]);
@@ -134,6 +137,10 @@ export default function MarketScreen() {
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
+    // Fecha leilões por lance vencidos (transfere jogador + cobra o vencedor) antes de
+    // buscar a lista, já que não há cron — a liquidação é sob demanda pelo client.
+    await supabase.rpc("settle_expired_auctions");
+
     const { data: teamData } = await supabase
       .from("teams").select("id, budget").single();
     if (!teamData) return;
@@ -269,17 +276,31 @@ export default function MarketScreen() {
     if (!detail || !myTeamId) return;
     const amount = parseInt(bidValue.replace(/\D/g, ""), 10);
     const minBid = Math.max(detail.current_bid, detail.start_price) + 1;
-    if (!amount || amount < minBid) { setBidError(`Lance mínimo: ${fmtPrice(minBid)}`); return; }
-    if (budget !== null && amount > budget) { setBidError("Saldo insuficiente"); return; }
-    if (detail.seller_team_id === myTeamId) { setBidError("Você não pode dar lance no próprio jogador"); return; }
+    if (!amount || amount < minBid) { setBidError(`${t("market.errMinBid")} ${fmtPrice(minBid)}`); return; }
+    if (budget !== null && amount > budget) { setBidError(t("market.errInsufficientBudget")); return; }
+    if (detail.seller_team_id === myTeamId) { setBidError(t("market.errCannotBidOwn")); return; }
     setBidState("loading"); setBidError("");
-    const { error } = await supabase.from("auctions")
-      .update({ current_bid: amount, current_bidder_team_id: myTeamId })
-      .eq("id", detail.id).eq("status", "active");
-    if (error) { setBidState("error"); setBidError("Erro ao registrar lance. Tente novamente."); return; }
+    const { error } = await supabase.rpc("place_bid", {
+      p_listing_id: detail.id,
+      p_amount:     amount,
+    });
+    if (error) {
+      const msg = error.message?.includes("insufficient_budget")
+        ? t("market.errInsufficientBudget")
+        : error.message?.includes("bid_too_low")
+        ? `${t("market.errMinBid")} ${fmtPrice(minBid)}`
+        : error.message?.includes("cannot_bid_own_player")
+        ? t("market.errCannotBidOwn")
+        : error.message?.includes("auction_ended")
+        ? t("market.errAuctionEnded")
+        : t("market.errBidGeneric");
+      setBidState("error");
+      setBidError(msg);
+      return;
+    }
     setBidState("success");
     setDetail((prev) => prev
-      ? { ...prev, current_bid: amount, current_bidder_team_id: myTeamId, current_bidder_name: "Você" }
+      ? { ...prev, current_bid: amount, current_bidder_team_id: myTeamId, current_bidder_name: t("market.you") }
       : prev);
     fetchAll();
   };
@@ -296,10 +317,12 @@ export default function MarketScreen() {
     });
     if (error) {
       const msg = error.message?.includes("listing_not_available")
-        ? "Jogador não está mais disponível"
+        ? t("market.errListingUnavailable")
         : error.message?.includes("cannot_buy_own_player")
-        ? "Você não pode comprar seu próprio jogador"
-        : "Erro ao processar compra. Tente novamente.";
+        ? t("market.errCannotBuyOwn")
+        : error.message?.includes("insufficient_budget")
+        ? t("market.errInsufficientBudget")
+        : t("market.errBuyGeneric");
       setBuyError(msg);
       setBuyingDirect(false);
       return;
@@ -331,7 +354,7 @@ export default function MarketScreen() {
   const submitSell = async () => {
     if (!sellPlayer || !myTeamId) return;
     const price = parseInt(sellPrice.replace(/\D/g, ""), 10);
-    if (!price || price <= 0) { setSellError("Informe um preço válido"); return; }
+    if (!price || price <= 0) { setSellError(t("market.errInvalidPrice")); return; }
 
     setSellState("loading"); setSellError("");
     const endsAt = new Date(Date.now() + sellDuration * 3_600_000).toISOString();
@@ -347,7 +370,7 @@ export default function MarketScreen() {
     if (sellType === "direct_sale") payload.sale_price = price;
 
     const { error } = await supabase.from("auctions").insert(payload);
-    if (error) { setSellState("error"); setSellError("Erro ao criar anúncio. Tente novamente."); return; }
+    if (error) { setSellState("error"); setSellError(t("market.errListingGeneric")); return; }
 
     setSellStep("success");
     fetchAll();
@@ -360,20 +383,16 @@ export default function MarketScreen() {
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
 
-      {/* ── HEADER ─────────────────────────────────────── */}
-      <View style={s.header}>
-        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
-          <Text style={s.backIcon}>‹</Text>
-        </TouchableOpacity>
-        <View style={s.headerCenter}>
-          <View style={s.headerDot} />
-          <Text style={s.headerTitle}>MERCADO</Text>
-        </View>
-        <View style={s.budgetPill}>
-          <Text style={s.budgetLabel}>ORÇAMENTO</Text>
-          <Text style={s.budgetValue}>{budget !== null ? fmtPrice(budget) : "—"}</Text>
-        </View>
-      </View>
+      <ScreenHeader
+        title={t("market.headerTitle")}
+        dotColor="#10B981"
+        right={
+          <View style={s.budgetPill}>
+            <Text style={s.budgetLabel}>{t("market.budgetLabel")}</Text>
+            <Text style={s.budgetValue}>{budget !== null ? fmtPrice(budget) : "—"}</Text>
+          </View>
+        }
+      />
 
       {/* ── TAB BAR ────────────────────────────────────── */}
       <View style={s.tabBar}>
@@ -384,7 +403,7 @@ export default function MarketScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[s.tabBtnText, activeTab === tab && s.tabBtnTextActive]}>
-              {tab === "buy" ? "🛒  COMPRAR" : "🏷️  VENDER"}
+              {tab === "buy" ? t("market.tabBuy") : t("market.tabSell")}
             </Text>
             {tab === "buy" && listings.length > 0 && (
               <View style={s.tabCount}>
@@ -400,10 +419,14 @@ export default function MarketScreen() {
         ))}
       </View>
 
+      <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+        <RewardedAdButton />
+      </View>
+
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator size="large" color="#10B981" />
-          <Text style={s.loadingText}>Carregando...</Text>
+          <Text style={s.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : activeTab === "buy" ? (
 
@@ -417,7 +440,7 @@ export default function MarketScreen() {
               <Text style={s.searchIcon}>🔍</Text>
               <TextInput
                 style={s.searchInput}
-                placeholder="Buscar jogador ou time..."
+                placeholder={t("market.searchPlaceholder")}
                 placeholderTextColor="#4B5563"
                 value={search}
                 onChangeText={setSearch}
@@ -433,9 +456,9 @@ export default function MarketScreen() {
           {/* Type filter */}
           <View style={s.typeRow}>
             {([
-              { key: "all",         label: "TODOS" },
-              { key: "auction",     label: "🔨 LEILÃO" },
-              { key: "direct_sale", label: "🏷️ VENDA DIRETA" },
+              { key: "all",         label: t("market.filterAll") },
+              { key: "auction",     label: t("market.filterAuction") },
+              { key: "direct_sale", label: t("market.filterDirectSale") },
             ] as { key: BuyFilter; label: string }[]).map((f) => (
               <TouchableOpacity
                 key={f.key}
@@ -459,7 +482,7 @@ export default function MarketScreen() {
                 style={[s.rolePill, !roleFilter && s.rolePillActive]}
                 onPress={() => setRoleFilter(null)}
               >
-                <Text style={[s.rolePillText, !roleFilter && s.rolePillTextActive]}>TODOS</Text>
+                <Text style={[s.rolePillText, !roleFilter && s.rolePillTextActive]}>{t("market.filterAll")}</Text>
               </TouchableOpacity>
               {allRoles.map((r) => {
                 const rc = ROLE_COLOR[r] ?? "#6B7280";
@@ -484,8 +507,8 @@ export default function MarketScreen() {
               {filtered.length === 0 ? (
                 <View style={s.emptyCard}>
                   <Text style={s.emptyEmoji}>🔍</Text>
-                  <Text style={s.emptyTitle}>Nenhum jogador disponível</Text>
-                  <Text style={s.emptySub}>Aguarde novos anúncios ou ajuste os filtros</Text>
+                  <Text style={s.emptyTitle}>{t("market.emptyTitle")}</Text>
+                  <Text style={s.emptySub}>{t("market.emptySub")}</Text>
                 </View>
               ) : (
                 filtered.map((l) => {
@@ -527,8 +550,8 @@ export default function MarketScreen() {
                           <View style={{ flex: 1 }}>
                             <View style={s.listingNameRow}>
                               <Text style={s.listingName}>{l.player_name}</Text>
-                              {isMyOwn && <View style={s.ownBadge}><Text style={s.ownBadgeText}>MEU</Text></View>}
-                              {isMyBid && <View style={s.winningBadge}><Text style={s.winningBadgeText}>GANHANDO</Text></View>}
+                              {isMyOwn && <View style={s.ownBadge}><Text style={s.ownBadgeText}>{t("market.ownBadge")}</Text></View>}
+                              {isMyBid && <View style={s.winningBadge}><Text style={s.winningBadgeText}>{t("market.winningBadge")}</Text></View>}
                               <View style={[
                                 s.typeBadge,
                                 { backgroundColor: l.listing_type === "direct_sale" ? "#10B98122" : "#6366F122",
@@ -537,7 +560,7 @@ export default function MarketScreen() {
                                 <Text style={[s.typeBadgeText, {
                                   color: l.listing_type === "direct_sale" ? "#10B981" : "#6366F1",
                                 }]}>
-                                  {l.listing_type === "direct_sale" ? "🏷️ VENDA" : "🔨 LEILÃO"}
+                                  {l.listing_type === "direct_sale" ? t("market.typeSale") : t("market.typeAuction")}
                                 </Text>
                               </View>
                             </View>
@@ -560,7 +583,7 @@ export default function MarketScreen() {
                         {l.listing_type === "direct_sale" ? (
                           <View style={s.priceRow}>
                             <View>
-                              <Text style={s.priceLabel}>PREÇO FIXO</Text>
+                              <Text style={s.priceLabel}>{t("market.priceFixed")}</Text>
                               <Text style={s.priceValue}>{l.sale_price ? fmtPrice(l.sale_price) : "—"}</Text>
                             </View>
                             {!isMyOwn && (
@@ -570,23 +593,23 @@ export default function MarketScreen() {
                                 onPress={() => confirmBuyDirect(l)}
                               >
                                 <Text style={s.buyBtnText}>
-                                  {canAfford ? "COMPRAR" : "SEM SALDO"}
+                                  {canAfford ? t("market.buyBtn") : t("market.noBudget")}
                                 </Text>
                               </TouchableOpacity>
                             )}
-                            {isMyOwn && <Text style={s.ownNote}>Seu anúncio</Text>}
+                            {isMyOwn && <Text style={s.ownNote}>{t("market.ownListingNote")}</Text>}
                           </View>
                         ) : (
                           <View style={s.priceRow}>
                             <View>
                               <Text style={s.priceLabel}>
-                                {l.current_bid > 0 ? "LANCE ATUAL" : "LANCE INICIAL"}
+                                {l.current_bid > 0 ? t("market.currentBid") : t("market.startingBid")}
                               </Text>
                               <Text style={[s.priceValue, isMyBid && { color: "#10B981" }]}>
                                 {fmtPrice(l.current_bid > 0 ? l.current_bid : l.start_price)}
                               </Text>
                               {(() => {
-                                const cd = fmtCountdown(l.ends_at);
+                                const cd = fmtCountdown(l.ends_at, t("market.closedLabel"));
                                 return (
                                   <Text style={[s.cdText, cd.urgent && { color: "#EF4444" }]}>
                                     ⏱ {cd.text}
@@ -599,10 +622,10 @@ export default function MarketScreen() {
                                 style={s.bidBtn}
                                 onPress={() => openDetail(l)}
                               >
-                                <Text style={s.bidBtnText}>DAR LANCE</Text>
+                                <Text style={s.bidBtnText}>{t("market.bidBtn")}</Text>
                               </TouchableOpacity>
                             )}
-                            {isMyOwn && <Text style={s.ownNote}>Seu leilão</Text>}
+                            {isMyOwn && <Text style={s.ownNote}>{t("market.ownAuctionNote")}</Text>}
                           </View>
                         )}
                       </View>
@@ -614,9 +637,9 @@ export default function MarketScreen() {
               {/* My active listings summary */}
               {myListings.length > 0 && (
                 <View style={s.myListingsSection}>
-                  <Text style={s.myListingsTitle}>MEUS ANÚNCIOS ATIVOS</Text>
+                  <Text style={s.myListingsTitle}>{t("market.myListingsTitle")}</Text>
                   {myListings.map((l) => {
-                    const cd = l.listing_type === "auction" ? fmtCountdown(l.ends_at) : null;
+                    const cd = l.listing_type === "auction" ? fmtCountdown(l.ends_at, t("market.closedLabel")) : null;
                     return (
                       <View key={l.id} style={s.myListingRow}>
                         <View style={[s.myListingDot, {
@@ -624,7 +647,7 @@ export default function MarketScreen() {
                         }]} />
                         <Text style={s.myListingName}>{l.player_name}</Text>
                         <Text style={s.myListingType}>
-                          {l.listing_type === "direct_sale" ? `${fmtPrice(l.sale_price ?? 0)} fixo` : `${l.current_bid > 0 ? fmtPrice(l.current_bid) : fmtPrice(l.start_price)} · ${cd?.text}`}
+                          {l.listing_type === "direct_sale" ? `${fmtPrice(l.sale_price ?? 0)} ${t("market.fixedSuffix")}` : `${l.current_bid > 0 ? fmtPrice(l.current_bid) : fmtPrice(l.start_price)} · ${cd?.text}`}
                         </Text>
                       </View>
                     );
@@ -645,13 +668,13 @@ export default function MarketScreen() {
 
           {sellStep === "pick_player" && (
             <View style={s.sellSection}>
-              <Text style={s.sellSectionTitle}>SELECIONE UM JOGADOR</Text>
-              <Text style={s.sellSectionSub}>Escolha quem você quer colocar no mercado</Text>
+              <Text style={s.sellSectionTitle}>{t("market.pickPlayerTitle")}</Text>
+              <Text style={s.sellSectionSub}>{t("market.pickPlayerSub")}</Text>
 
               {roster.length === 0 ? (
                 <View style={s.emptyCard}>
                   <Text style={s.emptyEmoji}>👥</Text>
-                  <Text style={s.emptyTitle}>Sem jogadores no elenco</Text>
+                  <Text style={s.emptyTitle}>{t("market.emptyRosterTitle")}</Text>
                 </View>
               ) : (
                 roster.map((p) => {
@@ -674,7 +697,7 @@ export default function MarketScreen() {
                             <Text style={[s.roleTagText, { color: rc }]}>{p.role}</Text>
                           </View>
                           <Text style={s.rosterAge}>{p.age}a</Text>
-                          <Text style={s.rosterSalary}>{fmtPrice(p.salary)}/mês</Text>
+                          <Text style={s.rosterSalary}>{fmtPrice(p.salary)}{t("market.perMonth")}</Text>
                         </View>
                       </View>
                       <View style={[s.rosterRtg, { backgroundColor: getRatingColor(p.rating) + "22" }]}>
@@ -682,7 +705,7 @@ export default function MarketScreen() {
                       </View>
                       {p.listed && (
                         <View style={s.listedOverlay}>
-                          <Text style={s.listedOverlayText}>NO MERCADO</Text>
+                          <Text style={s.listedOverlayText}>{t("market.listedOverlay")}</Text>
                         </View>
                       )}
                     </TouchableOpacity>
@@ -696,7 +719,7 @@ export default function MarketScreen() {
             <View style={s.sellSection}>
               {/* Back */}
               <TouchableOpacity style={s.sellBack} onPress={resetSell}>
-                <Text style={s.sellBackText}>‹  Trocar jogador</Text>
+                <Text style={s.sellBackText}>{t("market.changePlayer")}</Text>
               </TouchableOpacity>
 
               {/* Player header */}
@@ -726,7 +749,7 @@ export default function MarketScreen() {
               })()}
 
               {/* Type selector */}
-              <Text style={s.configLabel}>TIPO DE VENDA</Text>
+              <Text style={s.configLabel}>{t("market.saleTypeLabel")}</Text>
               <View style={s.typeSelector}>
                 <TouchableOpacity
                   style={[s.typeSelectorBtn, sellType === "auction" && s.typeSelectorBtnActive]}
@@ -734,9 +757,9 @@ export default function MarketScreen() {
                 >
                   <Text style={s.typeSelectorIcon}>🔨</Text>
                   <Text style={[s.typeSelectorLabel, sellType === "auction" && s.typeSelectorLabelActive]}>
-                    LEILÃO
+                    {t("market.auctionOption")}
                   </Text>
-                  <Text style={s.typeSelectorDesc}>Lance mais alto ganha</Text>
+                  <Text style={s.typeSelectorDesc}>{t("market.auctionDesc")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[s.typeSelectorBtn, sellType === "direct_sale" && s.typeSelectorBtnActiveDirect]}
@@ -744,15 +767,15 @@ export default function MarketScreen() {
                 >
                   <Text style={s.typeSelectorIcon}>🏷️</Text>
                   <Text style={[s.typeSelectorLabel, sellType === "direct_sale" && s.typeSelectorLabelActiveDirect]}>
-                    VENDA DIRETA
+                    {t("market.directSaleOption")}
                   </Text>
-                  <Text style={s.typeSelectorDesc}>Preço fixo, compra imediata</Text>
+                  <Text style={s.typeSelectorDesc}>{t("market.directSaleDesc")}</Text>
                 </TouchableOpacity>
               </View>
 
               {/* Price */}
               <Text style={s.configLabel}>
-                {sellType === "auction" ? "LANCE INICIAL" : "PREÇO DE VENDA"}
+                {sellType === "auction" ? t("market.startingBidLabel") : t("market.salePriceLabel")}
               </Text>
               <View style={s.priceInputWrap}>
                 <Text style={s.priceInputDollar}>$</Text>
@@ -774,7 +797,7 @@ export default function MarketScreen() {
               {/* Duration (auction only) */}
               {sellType === "auction" && (
                 <>
-                  <Text style={s.configLabel}>DURAÇÃO DO LEILÃO</Text>
+                  <Text style={s.configLabel}>{t("market.auctionDurationLabel")}</Text>
                   <View style={s.durationRow}>
                     {DURATIONS.map((d) => (
                       <TouchableOpacity
@@ -795,8 +818,8 @@ export default function MarketScreen() {
               <View style={[s.infoNote, { borderColor: sellType === "direct_sale" ? "#10B98133" : "#6366F133" }]}>
                 <Text style={[s.infoNoteText, { color: sellType === "direct_sale" ? "#10B981" : "#818CF8" }]}>
                   {sellType === "direct_sale"
-                    ? "💡 O jogador será transferido imediatamente após a compra. O valor será creditado no seu orçamento."
-                    : `💡 O leilão encerra em ${sellDuration}h. O jogador fica reservado e vai para o time com o lance mais alto.`}
+                    ? t("market.infoDirectSale")
+                    : t("market.infoAuction").replace("{h}", String(sellDuration))}
                 </Text>
               </View>
 
@@ -809,7 +832,7 @@ export default function MarketScreen() {
               {/* Actions */}
               <View style={s.sellActions}>
                 <TouchableOpacity style={s.sellBtnCancel} onPress={resetSell}>
-                  <Text style={s.sellBtnCancelText}>CANCELAR</Text>
+                  <Text style={s.sellBtnCancelText}>{t("market.cancelBtn")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[
@@ -823,7 +846,7 @@ export default function MarketScreen() {
                   {sellState === "loading"
                     ? <ActivityIndicator size="small" color="#FFF" />
                     : <Text style={s.sellBtnConfirmText}>
-                        {sellType === "direct_sale" ? "🏷️  ANUNCIAR" : "🔨  CRIAR LEILÃO"}
+                        {sellType === "direct_sale" ? t("market.listBtn") : t("market.createAuctionBtn")}
                       </Text>}
                 </TouchableOpacity>
               </View>
@@ -834,20 +857,20 @@ export default function MarketScreen() {
             <View style={s.successCard}>
               <Text style={s.successEmoji}>{sellType === "direct_sale" ? "🏷️" : "🔨"}</Text>
               <Text style={s.successTitle}>
-                {sellType === "direct_sale" ? "ANÚNCIO CRIADO!" : "LEILÃO CRIADO!"}
+                {sellType === "direct_sale" ? t("market.listingCreatedTitle") : t("market.auctionCreatedTitle")}
               </Text>
-              <Text style={s.successSub}>{sellPlayer.name} está no mercado</Text>
+              <Text style={s.successSub}>{sellPlayer.name} {t("market.onMarket")}</Text>
               {sellType === "auction" && (
-                <Text style={s.successSub}>Lance inicial: {fmtPrice(parseInt(sellPrice || "0"))}</Text>
+                <Text style={s.successSub}>{t("market.startingBidColon")} {fmtPrice(parseInt(sellPrice || "0"))}</Text>
               )}
               {sellType === "direct_sale" && (
-                <Text style={s.successSub}>Preço: {fmtPrice(parseInt(sellPrice || "0"))}</Text>
+                <Text style={s.successSub}>{t("market.priceColon")} {fmtPrice(parseInt(sellPrice || "0"))}</Text>
               )}
               <TouchableOpacity
                 style={[s.sellBtnConfirm, { backgroundColor: "#10B981", marginTop: 24, alignSelf: "stretch" }]}
                 onPress={() => { resetSell(); setActiveTab("buy"); }}
               >
-                <Text style={s.sellBtnConfirmText}>VER NO MERCADO</Text>
+                <Text style={s.sellBtnConfirmText}>{t("market.viewOnMarket")}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -875,9 +898,9 @@ export default function MarketScreen() {
                           {detail.player_role}
                         </Text>
                       </View>
-                      <Text style={s.detailAge}>{detail.player_age} anos</Text>
+                      <Text style={s.detailAge}>{detail.player_age} {t("market.yearsOld")}</Text>
                     </View>
-                    <Text style={s.detailTeam}>Vendido por {detail.seller_team_name}</Text>
+                    <Text style={s.detailTeam}>{t("market.soldBy")} {detail.seller_team_name}</Text>
                   </View>
                   <View style={[s.rtgBadge, { backgroundColor: getRatingColor(detail.player_rating) + "22" }]}>
                     <Text style={[s.rtgText, { color: getRatingColor(detail.player_rating) }]}>
@@ -889,12 +912,12 @@ export default function MarketScreen() {
                 {/* Stats */}
                 <View style={s.statsRow}>
                   {[
-                    { v: detail.player_rating, l: "Rating", c: getRatingColor(detail.player_rating) },
-                    { v: detail.avg_skill,     l: "Avg Skill", c: "#6366F1" },
+                    { v: detail.player_rating, l: t("market.statRating"), c: getRatingColor(detail.player_rating) },
+                    { v: detail.avg_skill,     l: t("market.statAvgSkill"), c: "#6366F1" },
                     { v: detail.player_deaths > 0
                         ? (detail.player_kills / detail.player_deaths).toFixed(2) : "∞",
-                      l: "K/D", c: "#10B981" },
-                    { v: Number(detail.player_adr).toFixed(0), l: "ADR", c: "#F59E0B" },
+                      l: t("market.statKD"), c: "#10B981" },
+                    { v: Number(detail.player_adr).toFixed(0), l: t("market.statADR"), c: "#F59E0B" },
                   ].map((stat) => (
                     <View key={stat.l} style={s.statCard}>
                       <Text style={[s.statValue, { color: stat.c }]}>{stat.v}</Text>
@@ -906,7 +929,7 @@ export default function MarketScreen() {
                 {/* Skills */}
                 {detail.player_skills.length > 0 && (
                   <View style={s.skillsWrap}>
-                    <Text style={s.skillsTitle}>SKILLS</Text>
+                    <Text style={s.skillsTitle}>{t("market.skillsTitle")}</Text>
                     {detail.player_skills.map((sk) => (
                       <View key={sk.name} style={s.skillRow}>
                         <Text style={s.skillName}>{sk.name}</Text>
@@ -925,7 +948,7 @@ export default function MarketScreen() {
                 {/* Auction info */}
                 <View style={s.auctionInfoRow}>
                   <View style={s.auctionInfoItem}>
-                    <Text style={s.auctionInfoLabel}>Lance Atual</Text>
+                    <Text style={s.auctionInfoLabel}>{t("market.auctionCurrentBid")}</Text>
                     <Text style={s.auctionInfoValue}>
                       {detail.current_bid > 0 ? fmtPrice(detail.current_bid) : "—"}
                     </Text>
@@ -935,14 +958,14 @@ export default function MarketScreen() {
                   </View>
                   <View style={s.auctionInfoDivider} />
                   <View style={s.auctionInfoItem}>
-                    <Text style={s.auctionInfoLabel}>Início</Text>
+                    <Text style={s.auctionInfoLabel}>{t("market.auctionStart")}</Text>
                     <Text style={s.auctionInfoValue}>{fmtPrice(detail.start_price)}</Text>
                   </View>
                   <View style={s.auctionInfoDivider} />
                   <View style={s.auctionInfoItem}>
-                    <Text style={s.auctionInfoLabel}>Tempo</Text>
+                    <Text style={s.auctionInfoLabel}>{t("market.auctionTime")}</Text>
                     {(() => {
-                      const cd = fmtCountdown(detail.ends_at);
+                      const cd = fmtCountdown(detail.ends_at, t("market.closedLabel"));
                       return <Text style={[s.auctionInfoValue, cd.urgent && { color: "#EF4444" }]}>{cd.text}</Text>;
                     })()}
                   </View>
@@ -951,9 +974,9 @@ export default function MarketScreen() {
                 {/* Bid form */}
                 {bidState !== "success" ? (
                   <>
-                    <Text style={s.bidTitle}>FAZER LANCE</Text>
+                    <Text style={s.bidTitle}>{t("market.makeBidTitle")}</Text>
                     <Text style={s.bidSub}>
-                      Mínimo:{" "}
+                      {t("market.minimumLabel")}{" "}
                       <Text style={{ color: "#FFF", fontWeight: "700" }}>
                         {fmtPrice(Math.max(detail.current_bid, detail.start_price) + 1)}
                       </Text>
@@ -985,7 +1008,7 @@ export default function MarketScreen() {
                     {bidError ? <View style={s.errBox}><Text style={s.errText}>{bidError}</Text></View> : null}
                     <View style={s.bidActions}>
                       <TouchableOpacity style={s.bidBtnCancel} onPress={closeDetail}>
-                        <Text style={s.bidBtnCancelText}>FECHAR</Text>
+                        <Text style={s.bidBtnCancelText}>{t("market.closeBtn")}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[s.bidBtnConfirm, bidState === "loading" && { opacity: 0.6 }]}
@@ -994,19 +1017,19 @@ export default function MarketScreen() {
                       >
                         {bidState === "loading"
                           ? <ActivityIndicator size="small" color="#FFF" />
-                          : <Text style={s.bidBtnConfirmText}>DAR LANCE</Text>}
+                          : <Text style={s.bidBtnConfirmText}>{t("market.bidBtn")}</Text>}
                       </TouchableOpacity>
                     </View>
                   </>
                 ) : (
                   <View style={s.bidSuccessWrap}>
                     <Text style={s.bidSuccessEmoji}>🔨</Text>
-                    <Text style={s.bidSuccessTitle}>LANCE REGISTRADO!</Text>
+                    <Text style={s.bidSuccessTitle}>{t("market.bidRegisteredTitle")}</Text>
                     <Text style={s.bidSuccessSub}>
-                      Você está vencendo com {fmtPrice(parseInt(bidValue))}
+                      {t("market.winningWith")} {fmtPrice(parseInt(bidValue))}
                     </Text>
                     <TouchableOpacity style={[s.bidBtnConfirm, { marginTop: 16, alignSelf: "stretch" }]} onPress={closeDetail}>
-                      <Text style={s.bidBtnConfirmText}>ÓTIMO!</Text>
+                      <Text style={s.bidBtnConfirmText}>{t("market.greatBtn")}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -1024,23 +1047,23 @@ export default function MarketScreen() {
             {buyTarget && (
               <>
                 <Text style={s.confirmEmoji}>🏷️</Text>
-                <Text style={s.confirmTitle}>CONFIRMAR COMPRA</Text>
+                <Text style={s.confirmTitle}>{t("market.confirmPurchaseTitle")}</Text>
                 <Text style={s.confirmSub}>
-                  Você está comprando{" "}
+                  {t("market.buyingText")}{" "}
                   <Text style={{ color: "#FFF", fontWeight: "700" }}>{buyTarget.player_name}</Text>
-                  {" "}por{" "}
+                  {" "}{t("market.forText")}{" "}
                   <Text style={{ color: "#10B981", fontWeight: "700" }}>
                     {fmtPrice(buyTarget.sale_price ?? 0)}
                   </Text>
                 </Text>
                 <View style={s.confirmBudgetRow}>
                   <View style={s.confirmBudgetItem}>
-                    <Text style={s.confirmBudgetLabel}>Orçamento atual</Text>
+                    <Text style={s.confirmBudgetLabel}>{t("market.currentBudget")}</Text>
                     <Text style={s.confirmBudgetVal}>{budget !== null ? fmtPrice(budget) : "—"}</Text>
                   </View>
                   <Text style={s.confirmArrow}>→</Text>
                   <View style={s.confirmBudgetItem}>
-                    <Text style={s.confirmBudgetLabel}>Após compra</Text>
+                    <Text style={s.confirmBudgetLabel}>{t("market.afterPurchase")}</Text>
                     <Text style={[s.confirmBudgetVal, { color: "#EF4444" }]}>
                       {budget !== null ? fmtPrice(budget - (buyTarget.sale_price ?? 0)) : "—"}
                     </Text>
@@ -1053,7 +1076,7 @@ export default function MarketScreen() {
                     onPress={() => setBuyTarget(null)}
                     disabled={buyingDirect}
                   >
-                    <Text style={s.bidBtnCancelText}>CANCELAR</Text>
+                    <Text style={s.bidBtnCancelText}>{t("market.cancelBtn")}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[s.bidBtnConfirm, { backgroundColor: "#10B981" }, buyingDirect && { opacity: 0.6 }]}
@@ -1062,7 +1085,7 @@ export default function MarketScreen() {
                   >
                     {buyingDirect
                       ? <ActivityIndicator size="small" color="#FFF" />
-                      : <Text style={s.bidBtnConfirmText}>COMPRAR</Text>}
+                      : <Text style={s.bidBtnConfirmText}>{t("market.confirmBuyBtn")}</Text>}
                   </TouchableOpacity>
                 </View>
               </>
@@ -1083,19 +1106,6 @@ const s = StyleSheet.create({
   loadingText: { fontSize: 13, color: "#6B7280" },
 
   // Header
-  header: {
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
-    justifyContent: "center", alignItems: "center",
-  },
-  backIcon:     { fontSize: 22, color: "#FFFFFF", lineHeight: 24, marginTop: -2 },
-  headerCenter: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
-  headerDot:    { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#10B981" },
-  headerTitle:  { fontSize: 16, fontWeight: "900", color: "#FFFFFF", letterSpacing: 4 },
   budgetPill: {
     backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#242424",
     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, alignItems: "flex-end",

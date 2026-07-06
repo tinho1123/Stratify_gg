@@ -1,0 +1,32 @@
+# EAS Build ignora este arquivo em vez do .gitignore quando ele existe — por isso repete tudo
+# que já era ignorado, e adiciona .claude/.agents (infraestrutura do Claude Code, não faz parte
+# do app; tem um symlink aí dentro que quebra o upload do build no Windows sem modo desenvolvedor).
+
+node_modules/
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.DS_Store
+*.pem
+.env*.local
+.env
+*.tsbuildinfo
+app-example
+/ios
+/android
+
+# Claude Code — não faz parte do app
+.claude/
+.agents/

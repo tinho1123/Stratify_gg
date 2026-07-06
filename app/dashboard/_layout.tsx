@@ -51,6 +51,48 @@ export default function DashboardLayout() {
           title: "Profile",
         }}
       />
+      <Stack.Screen
+        name="store"
+        options={{
+          headerShown: false,
+          title: "Loja",
+        }}
+      />
+      <Stack.Screen
+        name="achievements"
+        options={{
+          headerShown: false,
+          title: "Conquistas",
+        }}
+      />
+      <Stack.Screen
+        name="chat"
+        options={{
+          headerShown: false,
+          title: "Chat",
+        }}
+      />
+      <Stack.Screen
+        name="ranking"
+        options={{
+          headerShown: false,
+          title: "Ranking",
+        }}
+      />
+      <Stack.Screen
+        name="team"
+        options={{
+          headerShown: false,
+          title: "Perfil do Time",
+        }}
+      />
+      <Stack.Screen
+        name="messages"
+        options={{
+          headerShown: false,
+          title: "Mensagens",
+        }}
+      />
     </Stack>
   );
 }
