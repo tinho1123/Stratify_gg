@@ -1,11 +1,6 @@
 # Política de Privacidade — Stratify
 
-**Última atualização:** [PREENCHER DATA DE PUBLICAÇÃO]
-
-> ⚠️ Antes de publicar: substitua todos os campos marcados com `[PREENCHER]` pelas
-> informações reais (e-mail de contato, CNPJ/nome do responsável se houver, cidade/foro).
-> Depois de publicado, atualize `TERMS_URL`/`PRIVACY_URL` em `constants/monetization.ts`
-> com a URL final onde este documento estiver hospedado.
+**Última atualização:** 06/07/2026
 
 Esta Política de Privacidade descreve como o **Stratify** ("nós", "aplicativo", "app")
 coleta, usa, armazena e compartilha dados pessoais dos usuários ("você"), em conformidade
@@ -14,13 +9,14 @@ Brasil, com os princípios do GDPR quando aplicável.
 
 ## 1. Quem somos
 
-O Stratify é desenvolvido e operado por [PREENCHER: nome do responsável/empresa]
-([PREENCHER: e-mail de contato]). Para qualquer dúvida sobre esta política ou sobre seus
+O Stratify é desenvolvido e operado por Wellington Carvalho da Cunha Filho
+(carvalho.cwell@gmail.com). Para qualquer dúvida sobre esta política ou sobre seus
 dados pessoais, entre em contato pelo e-mail acima.
 
 ## 2. Quais dados coletamos
 
 ### 2.1 Dados de conta
+
 - **E-mail e senha**, fornecidos no cadastro. A senha é armazenada com hash bcrypt — nem
   a própria equipe do Stratify tem acesso a ela em texto puro.
 - **Identificador único de usuário** (gerado pelo Supabase Auth, nosso provedor de
@@ -28,11 +24,13 @@ dados pessoais, entre em contato pelo e-mail acima.
 - **Idioma preferido** e outras preferências de conta.
 
 ### 2.2 Dados de jogo
+
 - Nome do time, orçamento virtual, elenco de jogadores, táticas, estatísticas de partidas,
   posição na classificação (ranking/PDL), conquistas e itens cosméticos.
 - Esses dados existem apenas para o funcionamento do jogo e não têm valor fora dele.
 
 ### 2.3 Conteúdo gerado por você
+
 - Mensagens enviadas no **chat global**, no **chat por elo/tier** e em **mensagens
   diretas** entre times. Esse conteúdo pode ficar visível para outros usuários do
   Stratify, conforme a natureza do canal (chat global e por elo são públicos entre
@@ -41,6 +39,7 @@ dados pessoais, entre em contato pelo e-mail acima.
   ficar visíveis para outros jogadores nas telas de classificação/perfil público de time.
 
 ### 2.4 Identificadores de publicidade e anúncios
+
 - Quando você assiste a um anúncio em vídeo recompensado, nosso parceiro de anúncios
   (Google AdMob) pode coletar o **identificador de publicidade do dispositivo** (GAID no
   Android, IDFA no iOS) e dados técnicos do dispositivo, para exibir e medir anúncios.
@@ -50,30 +49,33 @@ dados pessoais, entre em contato pelo e-mail acima.
   (anúncios não personalizados continuam disponíveis).
 
 ### 2.5 Dados de compra
+
 - Se você compra créditos premium ou assina o Season Pass, o processamento é feito pela
   App Store/Google Play e pelo **RevenueCat**, nosso provedor de gestão de assinaturas.
   Recebemos do RevenueCat a confirmação da compra e o status da assinatura — nunca os
   dados do seu cartão de crédito, que ficam só com a loja de aplicativos.
 
 ### 2.6 Notificações push
+
 - Se você permitir notificações, coletamos um **token de push** (gerado pela Expo) para
   enviar avisos sobre partidas, leilões e eventos do jogo. Você pode desativar isso a
   qualquer momento nas configurações do seu dispositivo.
 
 ### 2.7 Dados técnicos
+
 - Tipo de dispositivo, sistema operacional e informações de diagnóstico básicas,
   coletadas automaticamente pelos SDKs listados acima para o funcionamento do app.
 
 ## 3. Para que usamos esses dados
 
-| Finalidade | Base legal (LGPD) |
-|---|---|
-| Criar e gerenciar sua conta e progresso no jogo | Execução de contrato (art. 7º, V) |
-| Exibir chat, classificação e perfil de time a outros jogadores | Execução de contrato |
-| Processar compras e assinaturas | Execução de contrato |
-| Enviar notificações sobre o jogo | Consentimento (art. 7º, I) |
-| Exibir anúncios e medir seu desempenho | Consentimento (App Tracking Transparency no iOS) / Legítimo interesse |
-| Prevenir fraude, abuso e moderar conteúdo do chat | Legítimo interesse (art. 7º, IX) |
+| Finalidade                                                     | Base legal (LGPD)                                                     |
+| -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Criar e gerenciar sua conta e progresso no jogo                | Execução de contrato (art. 7º, V)                                     |
+| Exibir chat, classificação e perfil de time a outros jogadores | Execução de contrato                                                  |
+| Processar compras e assinaturas                                | Execução de contrato                                                  |
+| Enviar notificações sobre o jogo                               | Consentimento (art. 7º, I)                                            |
+| Exibir anúncios e medir seu desempenho                         | Consentimento (App Tracking Transparency no iOS) / Legítimo interesse |
+| Prevenir fraude, abuso e moderar conteúdo do chat              | Legítimo interesse (art. 7º, IX)                                      |
 
 ## 4. Com quem compartilhamos seus dados
 
@@ -94,6 +96,7 @@ direitos, segurança ou propriedade do Stratify e de seus usuários.
 ## 5. Seus direitos (LGPD, art. 18)
 
 Você pode, a qualquer momento, solicitar:
+
 - confirmação da existência de tratamento dos seus dados;
 - acesso, correção ou atualização dos seus dados;
 - anonimização, bloqueio ou eliminação de dados desnecessários ou tratados em
@@ -110,7 +113,7 @@ formos obrigados a reter por lei (ex.: registros fiscais de compras).
 ## 6. Retenção de dados
 
 Mantemos seus dados enquanto sua conta estiver ativa. Se você excluir sua conta,
-removemos os dados pessoais em até [PREENCHER: prazo, ex. 30 dias], salvo obrigação
+removemos os dados pessoais em até 30 dias, salvo obrigação
 legal de retenção por prazo maior (ex.: dados fiscais de compras).
 
 ## 7. Segurança
@@ -122,8 +125,7 @@ suas informações.
 
 ## 8. Menores de idade
 
-O Stratify não é direcionado a menores de [PREENCHER: 13 ou 16, conforme sua política de
-idade mínima] anos. Se tomarmos conhecimento de que coletamos dados de uma criança abaixo
+O Stratify não é direcionado a menores de 16 anos. Se tomarmos conhecimento de que coletamos dados de uma criança abaixo
 dessa idade sem consentimento verificável dos pais/responsáveis, apagaremos esses dados.
 
 ## 9. Alterações nesta política
@@ -133,7 +135,7 @@ dentro do app ou por e-mail antes de entrarem em vigor.
 
 ## 10. Contato
 
-Dúvidas, solicitações ou reclamações sobre esta política: [PREENCHER: e-mail de contato].
+Dúvidas, solicitações ou reclamações sobre esta política: carvalho.cwell@gmail.com.
 
 ---
 

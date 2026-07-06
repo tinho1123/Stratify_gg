@@ -1,10 +1,6 @@
 # Termos de Uso — Stratify
 
-**Última atualização:** [PREENCHER DATA DE PUBLICAÇÃO]
-
-> ⚠️ Antes de publicar: substitua os campos `[PREENCHER]` (contato, foro/comarca) e leia
-> o aviso sobre moderação de chat no fim deste arquivo — a Apple e a Google exigem
-> mecanismo de denúncia/bloqueio pra apps com chat entre usuários (ver nota final).
+**Última atualização:** 06/07/2026
 
 Ao criar uma conta ou usar o **Stratify** ("app", "jogo"), você concorda com estes Termos
 de Uso. Se você não concorda, não use o app.
@@ -17,7 +13,7 @@ mercado e interage com outros jogadores via chat.
 
 ## 2. Conta
 
-- Você precisa ter no mínimo [PREENCHER: 13 ou 16] anos para criar uma conta.
+- Você precisa ter no mínimo 16 anos para criar uma conta.
 - Você é responsável por manter a confidencialidade da sua senha e por toda atividade
   realizada na sua conta.
 - Podemos suspender ou encerrar contas que violem estes Termos, sem aviso prévio em
@@ -26,6 +22,7 @@ mercado e interage com outros jogadores via chat.
 ## 3. Conduta e conteúdo gerado por usuários (chat)
 
 Ao usar o chat global, o chat por elo/tier ou mensagens diretas, você concorda em não:
+
 - publicar conteúdo ilegal, discurso de ódio, assédio, ameaças ou conteúdo sexualmente
   explícito envolvendo menores;
 - se passar por outra pessoa ou divulgar dados pessoais de terceiros sem consentimento;
@@ -52,7 +49,7 @@ estas regras, a nosso critério.
 ## 5. Propriedade intelectual
 
 Todo o conteúdo do Stratify (marca, design, código, textos, imagens) pertence a
-[PREENCHER: nome do responsável/empresa] ou seus licenciantes. Você recebe apenas uma
+Wellington Carvalho da Cunha Filho ou seus licenciantes. Você recebe apenas uma
 licença pessoal, não exclusiva e intransferível para usar o app conforme estes Termos.
 
 ## 6. Isenção de garantias e limitação de responsabilidade
@@ -70,7 +67,7 @@ Podemos encerrar ou suspender seu acesso em caso de violação destes Termos.
 ## 8. Lei aplicável
 
 Estes Termos são regidos pelas leis do Brasil. Fica eleito o foro da comarca de
-[PREENCHER: cidade/estado] para dirimir eventuais controvérsias, com renúncia a
+Cabo Frio/RJ para dirimir eventuais controvérsias, com renúncia a
 qualquer outro, por mais privilegiado que seja.
 
 ## 9. Alterações
@@ -81,13 +78,13 @@ significa aceitação dos novos Termos.
 
 ## 10. Contato
 
-Dúvidas sobre estes Termos: [PREENCHER: e-mail de contato].
+Dúvidas sobre estes Termos: carvalho.cwell@gmail.com.
 
 ---
 
 # Terms of Use — Stratify (English)
 
-**Last updated:** [FILL IN PUBLISH DATE]
+**Last updated:** 2026-07-06
 
 By creating an account or using **Stratify** ("app", "game"), you agree to these Terms
 of Use. If you don't agree, don't use the app.
@@ -100,7 +97,7 @@ other players via chat.
 
 ## 2. Account
 
-You must be at least [FILL IN: 13 or 16] years old to create an account. You're
+You must be at least 16 years old to create an account. You're
 responsible for keeping your password confidential and for all activity on your
 account. We may suspend or terminate accounts that violate these Terms, without prior
 notice in cases of serious abuse.
@@ -128,8 +125,7 @@ rewards granted by mistake (bug, exploit) may be reversed.
 
 ## 5. Intellectual property
 
-All Stratify content (brand, design, code, text, images) belongs to [FILL IN:
-owner/company name] or its licensors. You receive only a personal, non-exclusive,
+All Stratify content (brand, design, code, text, images) belongs to Wellington Carvalho da Cunha Filho or its licensors. You receive only a personal, non-exclusive,
 non-transferable license to use the app under these Terms.
 
 ## 6. Disclaimer and limitation of liability
@@ -145,7 +141,7 @@ terminate or suspend your access for violating these Terms.
 
 ## 8. Governing law
 
-These Terms are governed by the laws of Brazil, with the courts of [FILL IN: city/state]
+These Terms are governed by the laws of Brazil, with the courts of Cabo Frio/RJ
 having exclusive jurisdiction over any dispute.
 
 ## 9. Changes
@@ -155,4 +151,4 @@ before taking effect. Continued use after a change means you accept the new Term
 
 ## 10. Contact
 
-Questions about these Terms: [FILL IN: contact email].
+Questions about these Terms: carvalho.cwell@gmail.com.
