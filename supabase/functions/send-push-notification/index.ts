@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       to: tokenRow.token,
-      title: record.tag ? String(record.tag) : "Stratify_gg",
+      title: record.tag ? String(record.tag) : "Stratify",
       body: record.message,
       sound: "default",
       priority: "high",

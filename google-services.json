@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:804020263654:android:6250a1f0edfc606494b927",
+        "mobilesdk_app_id": "1:804020263654:android:0814c043db7843a594b927",
         "android_client_info": {
-          "package_name": "com.anonymous.Stratify_gg"
+          "package_name": "gg.stratify.app"
         }
       },
       "oauth_client": [],
