@@ -1,27 +1,30 @@
 {
   "expo": {
-    "name": "Stratify_gg",
-    "slug": "Stratify_gg",
+    "name": "Stratify",
+    "slug": "stratify-gg",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "stratifygg",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/images/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Stratify_gg"
+      "bundleIdentifier": "gg.stratify.app"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0A111C"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.Stratify_gg",
+      "package": "gg.stratify.app",
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
       "expo-router",

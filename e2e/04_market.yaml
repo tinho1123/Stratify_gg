@@ -1,4 +1,4 @@
-appId: com.anonymous.Stratify_gg
+appId: gg.stratify.app
 ---
 # Flow: Market — COMPRAR tab e VENDER tab
 # Pré-condição: usuário autenticado, migrations 015/016 aplicadas

@@ -1,4 +1,4 @@
-appId: com.anonymous.Stratify_gg
+appId: gg.stratify.app
 ---
 # Flow: Login completo com credenciais válidas
 # Valida: tela de login renderiza, aceita email/senha, redireciona para dashboard

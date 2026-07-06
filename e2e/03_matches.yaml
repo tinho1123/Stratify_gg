@@ -1,4 +1,4 @@
-appId: com.anonymous.Stratify_gg
+appId: gg.stratify.app
 ---
 # Flow: Matches — abre tela, valida elo/PDL, solicita partida, verifica bot ou real
 # Pré-condição: usuário autenticado

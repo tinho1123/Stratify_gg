@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { ReportBlockMenu, type ReportReason } from "@/components/ui/ReportBlockMenu";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
@@ -52,6 +53,8 @@ export default function DmThreadScreen() {
   const [sending, setSending]     = useState(false);
   const [myTeamId, setMyTeamId]   = useState<string | null>(null);
   const [otherTeam, setOtherTeam] = useState<OtherTeamInfo | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -70,7 +73,10 @@ export default function DmThreadScreen() {
       setMyTeamId(team.id);
 
       const otherTeamId = conv.team_a_id === team.id ? conv.team_b_id : conv.team_a_id;
-      const { data: profile } = await supabase.rpc("get_team_public_profile", { p_team_id: otherTeamId });
+      const [{ data: profile }, { data: blockedRow }] = await Promise.all([
+        supabase.rpc("get_team_public_profile", { p_team_id: otherTeamId }),
+        supabase.from("blocked_users").select("blocked_team_id").eq("blocked_team_id", otherTeamId).maybeSingle(),
+      ]);
       if (profile && !cancelled) {
         setOtherTeam({
           team_id: (profile as any).team_id,
@@ -79,6 +85,7 @@ export default function DmThreadScreen() {
           name_color: (profile as any).name_color,
         });
       }
+      if (!cancelled) setIsBlocked(!!blockedRow);
 
       const { data: history } = await supabase
         .from("dm_messages")
@@ -128,12 +135,43 @@ export default function DmThreadScreen() {
         ? t("chat.errRateLimited")
         : error.message?.includes("message_too_long")
         ? t("chat.errTooLong")
+        : error.message?.includes("blocked")
+        ? t("moderation.errBlockedSend")
         : t("chat.errSendGeneric");
       alert(t("common.error"), msg);
     }
   };
 
+  const handleReport = async (reason: ReportReason) => {
+    const lastFromOther = [...messages].reverse().find((m) => m.sender_team_id === otherTeam?.team_id);
+    if (!lastFromOther) { alert(t("common.error"), t("moderation.errReportGeneric")); return; }
+    const { error } = await supabase.rpc("report_message", {
+      p_source: "dm_message",
+      p_message_id: lastFromOther.id,
+      p_reason: reason,
+    });
+    if (error) { alert(t("common.error"), t("moderation.errReportGeneric")); return; }
+    alert(t("moderation.reportSuccessTitle"), t("moderation.reportSuccessMsg"), "success");
+  };
+
+  const handleBlock = async () => {
+    if (!otherTeam) return;
+    const { error } = await supabase.rpc("block_user", { p_team_id: otherTeam.team_id });
+    if (error) { alert(t("common.error"), t("moderation.errBlockGeneric")); return; }
+    setIsBlocked(true);
+    alert(t("moderation.blockSuccessTitle"), t("moderation.blockSuccessMsg"), "success");
+  };
+
+  const handleUnblock = async () => {
+    if (!otherTeam) return;
+    const { error } = await supabase.rpc("unblock_user", { p_team_id: otherTeam.team_id });
+    if (error) { alert(t("common.error"), t("moderation.errUnblockGeneric")); return; }
+    setIsBlocked(false);
+    alert(t("moderation.unblockSuccessTitle"), t("moderation.unblockSuccessMsg"), "success");
+  };
+
   const info = otherTeam ? getTierInfo(otherTeam.pdl) : null;
+  const visibleMessages = isBlocked ? messages.filter((m) => m.sender_team_id === myTeamId) : messages;
 
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
@@ -144,6 +182,18 @@ export default function DmThreadScreen() {
         subtitle={info ? `${info.tier}${info.division ? ` ${info.division}` : ""}` : undefined}
         subtitleStyle={info ? { color: info.color } : undefined}
         centered
+        right={
+          otherTeam ? (
+            <TouchableOpacity
+              style={s.menuBtn}
+              hitSlop={8}
+              accessibilityLabel={t("moderation.menuAccessibilityLabel")}
+              onPress={() => setShowMenu(true)}
+            >
+              <Text style={s.menuBtnText}>⋯</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
       />
 
       <KeyboardAvoidingView
@@ -163,13 +213,13 @@ export default function DmThreadScreen() {
             contentContainerStyle={{ padding: 16, paddingBottom: 8 }}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
           >
-            {messages.length === 0 ? (
+            {visibleMessages.length === 0 ? (
               <View style={s.emptyCard}>
                 <Text style={s.emptyEmoji}>✉️</Text>
                 <Text style={s.emptyText}>{t("messages.threadEmpty")}</Text>
               </View>
             ) : (
-              messages.map((m) => {
+              visibleMessages.map((m) => {
                 const isMe = m.sender_team_id === myTeamId;
                 return (
                   <View key={m.id} style={[s.msgRow, isMe && s.msgRowMe]}>
@@ -194,11 +244,12 @@ export default function DmThreadScreen() {
             placeholderTextColor="#4B5563"
             maxLength={300}
             multiline
+            editable={!isBlocked}
           />
           <TouchableOpacity
-            style={[s.sendBtn, (!input.trim() || sending) && s.sendBtnDisabled]}
+            style={[s.sendBtn, (!input.trim() || sending || isBlocked) && s.sendBtnDisabled]}
             onPress={sendMessage}
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || sending || isBlocked}
           >
             {sending
               ? <ActivityIndicator size="small" color="#080808" />
@@ -206,6 +257,16 @@ export default function DmThreadScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportBlockMenu
+        visible={showMenu}
+        onClose={() => setShowMenu(false)}
+        targetName={otherTeam?.team_name ?? ""}
+        onReport={handleReport}
+        onBlock={handleBlock}
+        isBlocked={isBlocked}
+        onUnblock={handleUnblock}
+      />
     </SafeAreaView>
   );
 }
@@ -248,4 +309,10 @@ const s = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: "#242424" },
   sendBtnText: { fontSize: 11, fontWeight: "900", color: "#080808", letterSpacing: 0.5 },
+  menuBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#242424",
+    justifyContent: "center", alignItems: "center",
+  },
+  menuBtnText: { fontSize: 16, fontWeight: "900", color: "#9CA3AF" },
 });

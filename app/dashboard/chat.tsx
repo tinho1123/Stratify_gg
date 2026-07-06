@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { ReportBlockMenu, type ReportReason } from "@/components/ui/ReportBlockMenu";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
@@ -78,7 +79,12 @@ export default function ChatScreen() {
   const [myTeamId, setMyTeamId]   = useState<string | null>(null);
   const [reactions, setReactions] = useState<Record<string, ReactionRow[]>>({});
   const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set());
+  const [menuTarget, setMenuTarget] = useState<ChatMessage | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const blockedIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => { blockedIdsRef.current = blockedIds; }, [blockedIds]);
 
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null;
@@ -89,6 +95,10 @@ export default function ChatScreen() {
       if (!team || cancelled) { setLoading(false); return; }
       setMyTeamId(team.id);
 
+      const { data: blocked } = await supabase.from("blocked_users").select("blocked_team_id");
+      const blockedSet = new Set((blocked ?? []).map((b: any) => b.blocked_team_id));
+      if (!cancelled) setBlockedIds(blockedSet);
+
       const { data: history } = await supabase
         .from("chat_messages")
         .select("id, team_id, team_name, team_pdl, name_color, message, created_at")
@@ -96,7 +106,10 @@ export default function ChatScreen() {
         .limit(50);
 
       if (cancelled) return;
-      const loaded = ((history ?? []) as ChatMessage[]).slice().reverse();
+      const loaded = ((history ?? []) as ChatMessage[])
+        .filter((m) => !blockedSet.has(m.team_id))
+        .slice()
+        .reverse();
       setMessages(loaded);
       setLoading(false);
 
@@ -121,7 +134,9 @@ export default function ChatScreen() {
           "postgres_changes",
           { event: "INSERT", schema: "public", table: "chat_messages" },
           (payload) => {
-            setMessages((prev) => [...prev, payload.new as ChatMessage]);
+            const row = payload.new as ChatMessage;
+            if (blockedIdsRef.current.has(row.team_id)) return;
+            setMessages((prev) => [...prev, row]);
           },
         )
         .on(
@@ -183,6 +198,27 @@ export default function ChatScreen() {
     await supabase.rpc("toggle_chat_reaction", { p_message_id: messageId, p_emoji: emoji });
   };
 
+  const handleReport = async (reason: ReportReason) => {
+    if (!menuTarget) return;
+    const { error } = await supabase.rpc("report_message", {
+      p_source: "chat_message",
+      p_message_id: menuTarget.id,
+      p_reason: reason,
+    });
+    if (error) { alert(t("common.error"), t("moderation.errReportGeneric")); return; }
+    alert(t("moderation.reportSuccessTitle"), t("moderation.reportSuccessMsg"), "success");
+  };
+
+  const handleBlock = async () => {
+    if (!menuTarget) return;
+    const targetTeamId = menuTarget.team_id;
+    const { error } = await supabase.rpc("block_user", { p_team_id: targetTeamId });
+    if (error) { alert(t("common.error"), t("moderation.errBlockGeneric")); return; }
+    setBlockedIds((prev) => new Set(prev).add(targetTeamId));
+    setMessages((prev) => prev.filter((m) => m.team_id !== targetTeamId));
+    alert(t("moderation.blockSuccessTitle"), t("moderation.blockSuccessMsg"), "success");
+  };
+
   return (
     <SafeAreaView style={s.safe} edges={["top"]}>
 
@@ -225,21 +261,31 @@ export default function ChatScreen() {
                       onLongPress={() => setPickerFor(showPicker ? null : m.id)}
                     >
                       {!isMe && (
-                        <TouchableOpacity
-                          style={s.senderRow}
-                          onPress={() => router.push({ pathname: "/dashboard/team/[id]", params: { id: m.team_id } })}
-                        >
-                          <Text
-                            style={[s.msgSender, m.name_color ? { color: m.name_color } : null]}
-                            numberOfLines={1}
+                        <View style={s.senderRowOuter}>
+                          <TouchableOpacity
+                            style={s.senderRow}
+                            onPress={() => router.push({ pathname: "/dashboard/team/[id]", params: { id: m.team_id } })}
                           >
-                            {m.team_name}
-                          </Text>
-                          <View style={[s.eloDot, { backgroundColor: info.color }]} />
-                          <Text style={[s.eloText, { color: info.color }]} numberOfLines={1}>
-                            {info.tier}{info.division ? ` ${info.division}` : ""}
-                          </Text>
-                        </TouchableOpacity>
+                            <Text
+                              style={[s.msgSender, m.name_color ? { color: m.name_color } : null]}
+                              numberOfLines={1}
+                            >
+                              {m.team_name}
+                            </Text>
+                            <View style={[s.eloDot, { backgroundColor: info.color }]} />
+                            <Text style={[s.eloText, { color: info.color }]} numberOfLines={1}>
+                              {info.tier}{info.division ? ` ${info.division}` : ""}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={s.menuBtn}
+                            hitSlop={8}
+                            accessibilityLabel={t("moderation.menuAccessibilityLabel")}
+                            onPress={() => setMenuTarget(m)}
+                          >
+                            <Text style={s.menuBtnText}>⋯</Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
                       <Text style={s.msgText}>{m.message}</Text>
                       <Text style={s.msgTime}>{formatTime(m.created_at)}</Text>
@@ -304,6 +350,14 @@ export default function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <ReportBlockMenu
+        visible={!!menuTarget}
+        onClose={() => setMenuTarget(null)}
+        targetName={menuTarget?.team_name ?? ""}
+        onReport={handleReport}
+        onBlock={handleBlock}
+      />
     </SafeAreaView>
   );
 }
@@ -332,7 +386,12 @@ const s = StyleSheet.create({
   },
   bubbleOther: { backgroundColor: "#0D0D0D", borderColor: "#1A1A1A" },
   bubbleMe:    { backgroundColor: "#EC489918", borderColor: "#EC489944" },
-  senderRow: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 },
+  senderRowOuter: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 2,
+  },
+  senderRow: { flexDirection: "row", alignItems: "center", gap: 5, flexShrink: 1 },
+  menuBtn: { paddingHorizontal: 6, paddingVertical: 2 },
+  menuBtnText: { fontSize: 14, fontWeight: "900", color: "#4B5563" },
   msgSender: { fontSize: 10, fontWeight: "800", color: "#6B7280" },
   eloDot:    { width: 5, height: 5, borderRadius: 2.5 },
   eloText:   { fontSize: 9, fontWeight: "800", letterSpacing: 0.5 },
