@@ -548,6 +548,7 @@ export default function HomeScreen() {
                 { icon: "💬", label: t("dashboard.actionChat"), sub: t("dashboard.actionChatSub"), route: "/dashboard/chat", accent: C.info, flagKey: "chat" },
                 { icon: "📊", label: t("dashboard.actionRanking"), sub: t("dashboard.actionRankingSub"), route: "/dashboard/ranking", accent: C.pink },
                 { icon: "✉️", label: t("dashboard.actionMessages"), sub: t("dashboard.actionMessagesSub"), route: "/dashboard/messages", accent: C.emerald },
+                { icon: "🛡️", label: t("dashboard.actionGuild"), sub: t("dashboard.actionGuildSub"), route: "/dashboard/guild", accent: C.info, flagKey: "guild" },
               ]
                 .filter((a) => !a.flagKey || isEnabled(a.flagKey))
                 .map((a, i) => (

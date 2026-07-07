@@ -87,6 +87,13 @@ export default function DashboardLayout() {
         }}
       />
       <Stack.Screen
+        name="guild"
+        options={{
+          headerShown: false,
+          title: "Guilda",
+        }}
+      />
+      <Stack.Screen
         name="messages"
         options={{
           headerShown: false,

@@ -61,25 +61,49 @@ export default function TeamProfileScreen() {
   const [profile, setProfile]     = useState<PublicProfile | null>(null);
   const [myTeamId, setMyTeamId]   = useState<string | null>(null);
   const [startingDm, setStartingDm] = useState(false);
+  const [myGuild, setMyGuild]     = useState<{ guild_id: string; my_role: string } | null>(null);
+  const [targetInGuild, setTargetInGuild] = useState(false);
+  const [inviting, setInviting]   = useState(false);
+  const [invited, setInvited]     = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       setLoading(true);
-      const [{ data }, { data: myTeam }] = await Promise.all([
+      const [{ data }, { data: myTeam }, { data: guild }, { data: targetMembership }] = await Promise.all([
         supabase.rpc("get_team_public_profile", { p_team_id: params.id }),
         supabase.from("teams").select("id").single(),
+        supabase.rpc("get_my_guild"),
+        supabase.from("guild_members").select("guild_id").eq("team_id", params.id).maybeSingle(),
       ]);
       if (!cancelled) {
         setProfile((data ?? null) as PublicProfile | null);
         setMyTeamId(myTeam?.id ?? null);
+        setMyGuild((guild ?? null) as { guild_id: string; my_role: string } | null);
+        setTargetInGuild(!!targetMembership);
         setLoading(false);
       }
     })();
 
     return () => { cancelled = true; };
   }, [params.id]);
+
+  const canInviteToGuild =
+    !!myGuild && (myGuild.my_role === "leader" || myGuild.my_role === "officer") && !targetInGuild;
+
+  const inviteToGuild = async () => {
+    if (!profile || !myGuild || inviting) return;
+    setInviting(true);
+    const { error } = await supabase.rpc("invite_team", { p_guild_id: myGuild.guild_id, p_team_id: profile.team_id });
+    setInviting(false);
+    if (error) {
+      alert(t("common.error"), t("guild.errGeneric"));
+      return;
+    }
+    setInvited(true);
+    alert(t("guild.inviteSentTitle"), t("guild.inviteSentToast"), "success");
+  };
 
   const info = profile ? getTierInfo(profile.pdl) : null;
   const isMe = !!profile && profile.team_id === myTeamId;
@@ -153,6 +177,14 @@ export default function TeamProfileScreen() {
                 {startingDm
                   ? <ActivityIndicator size="small" color="#080808" />
                   : <Text style={s.messageBtnText}>{t("teamProfile.messageBtn")}</Text>}
+              </TouchableOpacity>
+            )}
+
+            {!isMe && canInviteToGuild && !invited && (
+              <TouchableOpacity style={s.guildInviteBtn} onPress={inviteToGuild} disabled={inviting} activeOpacity={0.8}>
+                {inviting
+                  ? <ActivityIndicator size="small" color="#FFFFFF" />
+                  : <Text style={s.guildInviteBtnText}>{t("guild.inviteToGuildBtn")}</Text>}
               </TouchableOpacity>
             )}
           </View>
@@ -235,6 +267,13 @@ const s = StyleSheet.create({
     minWidth: 140,
   },
   messageBtnText: { fontSize: 11, fontWeight: "900", color: "#080808", letterSpacing: 0.5 },
+
+  guildInviteBtn: {
+    marginTop: 6, height: 38, paddingHorizontal: 20, borderRadius: 10,
+    backgroundColor: "#161616", borderWidth: 1, borderColor: "#6366F144",
+    justifyContent: "center", alignItems: "center", minWidth: 140,
+  },
+  guildInviteBtnText: { fontSize: 11, fontWeight: "900", color: "#6366F1", letterSpacing: 0.5 },
 
   sectionLabel: {
     fontSize: 10, fontWeight: "900", color: "#6B7280",
