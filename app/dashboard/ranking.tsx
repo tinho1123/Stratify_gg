@@ -32,6 +32,21 @@ interface MyRank {
   total: number;
 }
 
+interface GuildLeaderboardRow {
+  rank: number;
+  guild_id: string;
+  guild_name: string;
+  is_public: boolean;
+  member_count: number;
+  total_pdl: number;
+}
+
+interface MyGuildInfo {
+  guild_id: string;
+}
+
+type Tab = "teams" | "guilds";
+
 const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -39,23 +54,38 @@ const RANK_MEDAL: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 export default function RankingScreen() {
   const { t } = useLanguage();
 
+  const [tab, setTab] = useState<Tab>("teams");
+
   const [loading, setLoading]   = useState(true);
   const [rows, setRows]         = useState<LeaderboardRow[]>([]);
   const [myTeamId, setMyTeamId] = useState<string | null>(null);
   const [myRank, setMyRank]     = useState<MyRank | null>(null);
 
+  const [guildRows, setGuildRows] = useState<GuildLeaderboardRow[]>([]);
+  const [myGuildId, setMyGuildId] = useState<string | null>(null);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    const [{ data: team }, { data: leaderboard }, { data: rankData }] = await Promise.all([
+    const [
+      { data: team },
+      { data: leaderboard },
+      { data: rankData },
+      { data: guildLeaderboard },
+      { data: myGuild },
+    ] = await Promise.all([
       supabase.from("teams").select("id").single(),
       supabase.rpc("get_leaderboard", { p_limit: 100 }),
       supabase.rpc("get_my_rank"),
+      supabase.rpc("get_guild_leaderboard", { p_limit: 100 }),
+      supabase.rpc("get_my_guild"),
     ]);
 
     setMyTeamId(team?.id ?? null);
     setRows((leaderboard ?? []) as LeaderboardRow[]);
     if (rankData) setMyRank(rankData as MyRank);
+    setGuildRows((guildLeaderboard ?? []) as GuildLeaderboardRow[]);
+    setMyGuildId((myGuild as MyGuildInfo | null)?.guild_id ?? null);
 
     setLoading(false);
   }, []);
@@ -69,12 +99,29 @@ export default function RankingScreen() {
 
       <ScreenHeader title={t("ranking.headerTitle")} centered />
 
+      <View style={s.tabBar}>
+        <TouchableOpacity
+          style={[s.tabBtn, tab === "teams" && s.tabBtnActive]}
+          onPress={() => setTab("teams")}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.tabBtnText, tab === "teams" && s.tabBtnTextActive]}>{t("ranking.tabTeams")}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.tabBtn, tab === "guilds" && s.tabBtnActive]}
+          onPress={() => setTab("guilds")}
+          activeOpacity={0.8}
+        >
+          <Text style={[s.tabBtnText, tab === "guilds" && s.tabBtnTextActive]}>{t("ranking.tabGuilds")}</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator size="large" color="#EC4899" />
           <Text style={s.loadingText}>{t("common.loading")}</Text>
         </View>
-      ) : (
+      ) : tab === "teams" ? (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
           {myRank && (
             <View style={s.myRankCard}>
@@ -137,6 +184,42 @@ export default function RankingScreen() {
             })
           )}
         </ScrollView>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+          {guildRows.length === 0 ? (
+            <View style={s.emptyCard}>
+              <Text style={s.emptyEmoji}>🛡️</Text>
+              <Text style={s.emptyText}>{t("ranking.emptyState")}</Text>
+            </View>
+          ) : (
+            guildRows.map((row) => {
+              const isMine = row.guild_id === myGuildId;
+              return (
+                <TouchableOpacity
+                  key={row.guild_id}
+                  style={[s.row, isMine && s.rowMe]}
+                  activeOpacity={0.75}
+                  onPress={() => router.push({ pathname: "/dashboard/guild/[id]", params: { id: row.guild_id } } as any)}
+                >
+                  <View style={s.rankWrap}>
+                    {RANK_MEDAL[row.rank]
+                      ? <Text style={s.rankMedal}>{RANK_MEDAL[row.rank]}</Text>
+                      : <Text style={s.rankNumber}>{row.rank}</Text>}
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.teamName} numberOfLines={1}>{row.guild_name}</Text>
+                    <View style={s.rowSub}>
+                      <Text style={s.recordText}>{row.member_count}/25 {t("ranking.membersCount")}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={s.pdlText}>{row.total_pdl}</Text>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -148,6 +231,15 @@ const s = StyleSheet.create({
   safe:        { flex: 1, backgroundColor: "#080808" },
   center:      { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 13, color: "#6B7280" },
+
+  tabBar: { flexDirection: "row", gap: 8, paddingHorizontal: 16, marginBottom: 4 },
+  tabBtn: {
+    flex: 1, alignItems: "center", paddingVertical: 10, borderRadius: 10,
+    backgroundColor: "#0D0D0D", borderWidth: 1, borderColor: "#1A1A1A",
+  },
+  tabBtnActive: { backgroundColor: "#EC489918", borderColor: "#EC489966" },
+  tabBtnText: { fontSize: 11, fontWeight: "900", color: "#6B7280", letterSpacing: 1 },
+  tabBtnTextActive: { color: "#EC4899" },
 
   myRankCard: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
