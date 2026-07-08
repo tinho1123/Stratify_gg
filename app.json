@@ -55,6 +55,13 @@
         {
           "userTrackingPermission": "Usamos esse identificador para mostrar anúncios mais relevantes e medir o desempenho das campanhas. Seus dados de jogo continuam privados."
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "wellington-carvalho-da-cunha-f",
+          "project": "react-native-stratify"
+        }
       ]
     ],
     "experiments": {

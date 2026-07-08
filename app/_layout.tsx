@@ -4,6 +4,7 @@ import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { registerForPushNotifications } from "@/services/notifications";
 import { configureRevenueCat } from "@/services/revenuecat";
+import { initSentry, wrapRootComponent } from "@/services/sentryInit";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 import { Stack, router } from "expo-router";
@@ -12,6 +13,10 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
 import mobileAds from "react-native-google-mobile-ads";
 import "react-native-reanimated";
+
+// O mais cedo possível, antes de qualquer render — pra capturar erros que aconteçam
+// durante a montagem inicial do app.
+initSentry();
 
 async function redirectAfterLogin() {
   const { data } = await supabase
@@ -26,7 +31,7 @@ async function redirectAfterLogin() {
   }
 }
 
-export default function RootLayout() {
+function RootLayout() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -90,3 +95,5 @@ export default function RootLayout() {
     </LanguageProvider>
   );
 }
+
+export default wrapRootComponent(RootLayout);
