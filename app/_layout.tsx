@@ -6,7 +6,7 @@ import { useMinVersionCheck } from "@/hooks/useMinVersionCheck";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { registerForPushNotifications } from "@/services/notifications";
 import { configureRevenueCat } from "@/services/revenuecat";
-import { initMobileAds } from "@/services/adsInit";
+import { initializeAds } from "@/services/adsInit";
 import { initSentry, wrapRootComponent } from "@/services/sentryInit";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
@@ -45,7 +45,7 @@ function RootLayout() {
       if (Platform.OS === "ios") {
         await requestTrackingPermissionsAsync();
       }
-      await initMobileAds();
+      await initializeAds();
     })();
   }, []);
 
