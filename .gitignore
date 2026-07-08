@@ -37,6 +37,9 @@ yarn-error.*
 .env*.local
 .env
 
+# service account credentials (Google Cloud / Play Console)
+*service-account*.json
+
 # typescript
 *.tsbuildinfo
 
