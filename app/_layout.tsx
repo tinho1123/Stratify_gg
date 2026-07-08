@@ -1,9 +1,12 @@
 import { AppAlertProvider } from "@/components/ui/AppAlert";
+import { UpdateRequiredScreen } from "@/components/ui/UpdateRequiredScreen";
 import { supabase } from "@/database/supabase";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
+import { useMinVersionCheck } from "@/hooks/useMinVersionCheck";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { registerForPushNotifications } from "@/services/notifications";
 import { configureRevenueCat } from "@/services/revenuecat";
+import { initMobileAds } from "@/services/adsInit";
 import { initSentry, wrapRootComponent } from "@/services/sentryInit";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
@@ -11,7 +14,6 @@ import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Platform, View } from "react-native";
-import mobileAds from "react-native-google-mobile-ads";
 import "react-native-reanimated";
 
 // O mais cedo possível, antes de qualquer render — pra capturar erros que aconteçam
@@ -33,6 +35,7 @@ async function redirectAfterLogin() {
 
 function RootLayout() {
   const [checking, setChecking] = useState(true);
+  const { checking: checkingVersion, updateRequired } = useMinVersionCheck();
 
   useEffect(() => {
     (async () => {
@@ -42,7 +45,7 @@ function RootLayout() {
       if (Platform.OS === "ios") {
         await requestTrackingPermissionsAsync();
       }
-      await mobileAds().initialize();
+      await initMobileAds();
     })();
   }, []);
 
@@ -69,11 +72,19 @@ function RootLayout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (checking) {
+  if (checkingVersion || checking) {
     return (
       <View style={{ flex: 1, backgroundColor: "#0D0D0D", justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color="#10B981" />
       </View>
+    );
+  }
+
+  if (updateRequired) {
+    return (
+      <LanguageProvider>
+        <UpdateRequiredScreen />
+      </LanguageProvider>
     );
   }
 

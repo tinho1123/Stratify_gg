@@ -16,6 +16,11 @@ export const translations = {
       save: "Salvar",
       error: "Erro",
     },
+    update: {
+      title: "Atualização necessária",
+      message: "Uma nova versão do Stratify está disponível. Atualize para continuar jogando.",
+      button: "Atualizar agora",
+    },
     login: {
       subtitle: "Gerencie seu time. Conquiste o topo.",
       emailLabel: "E-mail",
@@ -722,6 +727,11 @@ export const translations = {
       cancel: "Cancel",
       save: "Save",
       error: "Error",
+    },
+    update: {
+      title: "Update required",
+      message: "A new version of Stratify is available. Update to keep playing.",
+      button: "Update now",
     },
     login: {
       subtitle: "Manage your team. Conquer the top.",
