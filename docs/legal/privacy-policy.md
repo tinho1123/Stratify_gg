@@ -125,7 +125,7 @@ suas informações.
 
 ## 8. Menores de idade
 
-O Stratify não é direcionado a menores de 16 anos. Se tomarmos conhecimento de que coletamos dados de uma criança abaixo
+O Stratify não é direcionado a menores de 14 anos. Se tomarmos conhecimento de que coletamos dados de uma criança abaixo
 dessa idade sem consentimento verificável dos pais/responsáveis, apagaremos esses dados.
 
 ## 9. Alterações nesta política
@@ -141,7 +141,7 @@ Dúvidas, solicitações ou reclamações sobre esta política: carvalho.cwell@g
 
 # Privacy Policy — Stratify (English)
 
-**Last updated:** [FILL IN PUBLISH DATE]
+**Last updated:** 2026-07-08
 
 This Privacy Policy explains how **Stratify** ("we", "the app") collects, uses, stores
 and shares personal data, in line with Brazil's LGPD and, where applicable, GDPR
@@ -149,8 +149,8 @@ principles.
 
 ## 1. Who we are
 
-Stratify is developed and operated by [FILL IN: owner/company name]
-([FILL IN: contact email]). Contact us at the address above for any question about this
+Stratify is developed and operated by Wellington Carvalho da Cunha Filho
+(carvalho.cwell@gmail.com). Contact us at the address above for any question about this
 policy or your personal data.
 
 ## 2. What we collect
@@ -203,7 +203,7 @@ records).
 ## 6. Data retention
 
 We keep your data while your account is active. If you delete your account, we remove
-personal data within [FILL IN: e.g. 30 days], except where longer legal retention
+personal data within 30 days, except where longer legal retention
 applies.
 
 ## 7. Security
@@ -214,8 +214,7 @@ market-standard practices to protect your information.
 
 ## 8. Children
 
-Stratify is not directed at children under [FILL IN: 13 or 16, per your minimum age
-policy]. If we learn we've collected data from a child under that age without verifiable
+Stratify is not directed at children under 14. If we learn we've collected data from a child under that age without verifiable
 parental consent, we will delete it.
 
 ## 9. Changes to this policy
@@ -225,4 +224,4 @@ by email before taking effect.
 
 ## 10. Contact
 
-Questions, requests or complaints about this policy: [FILL IN: contact email].
+Questions, requests or complaints about this policy: carvalho.cwell@gmail.com.

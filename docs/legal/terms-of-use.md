@@ -13,7 +13,7 @@ mercado e interage com outros jogadores via chat.
 
 ## 2. Conta
 
-- Você precisa ter no mínimo 16 anos para criar uma conta.
+- Você precisa ter no mínimo 14 anos para criar uma conta.
 - Você é responsável por manter a confidencialidade da sua senha e por toda atividade
   realizada na sua conta.
 - Podemos suspender ou encerrar contas que violem estes Termos, sem aviso prévio em
@@ -97,7 +97,7 @@ other players via chat.
 
 ## 2. Account
 
-You must be at least 16 years old to create an account. You're
+You must be at least 14 years old to create an account. You're
 responsible for keeping your password confidential and for all activity on your
 account. We may suspend or terminate accounts that violate these Terms, without prior
 notice in cases of serious abuse.
