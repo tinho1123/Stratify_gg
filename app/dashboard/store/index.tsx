@@ -4,6 +4,7 @@ import { supabase } from "@/database/supabase";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { getCreditPackages, isRevenueCatConfigured, purchasePackage, restorePurchases } from "@/services/revenuecat";
 import { useFocusEffect } from "@react-navigation/native";
+import { router } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -221,6 +222,20 @@ export default function StoreScreen() {
               : <Text style={s.restoreBtnText}>{t("store.restoreBtn")}</Text>}
           </TouchableOpacity>
 
+          {/* ══ ATALHO: ESCUDO DO TIME ═════════════════════ */}
+          <TouchableOpacity
+            style={[s.shieldPromoCard, { marginTop: 24 }]}
+            activeOpacity={0.85}
+            onPress={() => router.push("/dashboard/manage_team/shield" as any)}
+          >
+            <Text style={s.shieldPromoIcon}>🛡️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.shieldPromoTitle}>{t("store.shieldPromoTitle")}</Text>
+              <Text style={s.shieldPromoSubtitle}>{t("store.shieldPromoSubtitle")}</Text>
+            </View>
+            <Text style={s.shieldPromoArrow}>›</Text>
+          </TouchableOpacity>
+
           {/* ══ COSMÉTICOS ═════════════════════════════════ */}
           <Text style={[s.sectionTitle, { marginTop: 24 }]}>{t("store.cosmeticsTitle")}</Text>
 
@@ -314,6 +329,16 @@ const s = StyleSheet.create({
   },
   emptyEmoji: { fontSize: 28, marginBottom: 2 },
   emptyText:  { fontSize: 12, color: "#6B7280", textAlign: "center" },
+
+  shieldPromoCard: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#0D0D0D", borderRadius: 14,
+    borderWidth: 1, borderColor: "#1A1A1A", padding: 14,
+  },
+  shieldPromoIcon: { fontSize: 22 },
+  shieldPromoTitle: { fontSize: 12, fontWeight: "800", color: "#FFFFFF" },
+  shieldPromoSubtitle: { fontSize: 10, color: "#6B7280", marginTop: 2 },
+  shieldPromoArrow: { fontSize: 20, color: "#4B5563" },
 
   categoryLabel: {
     fontSize: 9, fontWeight: "800", color: "#4B5563",

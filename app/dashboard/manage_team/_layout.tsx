@@ -14,6 +14,7 @@ export default function ManageTeamLayout() {
           title: "Manage Team",
         }}
       />
+      <Stack.Screen name="shield" options={{ title: "Escudo" }} />
     </Stack>
   );
 }

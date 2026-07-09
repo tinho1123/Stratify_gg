@@ -49,7 +49,7 @@ export default function SetupTeamScreen() {
 
     const { data: teamData, error: updateError } = await supabase
       .from("teams")
-      .update({ name, onboarded: true })
+      .update({ name })
       .eq("user_id", user.id)
       .select("id")
       .single();
@@ -62,7 +62,7 @@ export default function SetupTeamScreen() {
 
     await generateStarterPlayers();
     setLoading(false);
-    router.replace("/dashboard");
+    router.replace("/setup/shield");
   };
 
   return (

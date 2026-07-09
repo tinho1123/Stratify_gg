@@ -48,7 +48,7 @@ export default function CreateGuildScreen() {
   const submit = async () => {
     if (submitting) return;
     setSubmitting(true);
-    const { error } = await supabase.rpc("create_guild", {
+    const { data, error } = await supabase.rpc("create_guild", {
       p_name: name.trim(),
       p_description: description.trim(),
       p_is_public: isPublic,
@@ -58,7 +58,10 @@ export default function CreateGuildScreen() {
       alert(t("common.error"), t(ERROR_KEY[error.message] ?? "guild.errGeneric"));
       return;
     }
-    router.replace("/dashboard/guild" as any);
+    router.replace({
+      pathname: "/dashboard/guild/shield",
+      params: { guildId: (data as any)?.id },
+    } as any);
   };
 
   return (
