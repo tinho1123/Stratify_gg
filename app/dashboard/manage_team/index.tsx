@@ -459,9 +459,14 @@ export default function ManageTeamScreen() {
       <View style={s.header}>
         <View style={s.headerTop}>
           <Text style={s.headerTitle}>{t("manageTeam.headerTitle")}</Text>
-          <TouchableOpacity style={s.addBtn} onPress={() => router.push("/dashboard/market")}>
-            <Text style={s.addBtnText}>{t("manageTeam.addBtn")}</Text>
-          </TouchableOpacity>
+          <View style={s.headerActions}>
+            <TouchableOpacity style={s.shieldBtn} onPress={() => router.push("/dashboard/manage_team/shield")}>
+              <Text style={s.shieldBtnText}>🛡️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.addBtn} onPress={() => router.push("/dashboard/market")}>
+              <Text style={s.addBtnText}>{t("manageTeam.addBtn")}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Stats row */}
@@ -949,6 +954,12 @@ const s = StyleSheet.create({
   },
   headerTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   headerTitle: { fontSize: 13, fontWeight: "800", color: "#6B7280", letterSpacing: 3 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  shieldBtn: {
+    width: 30, height: 30, borderRadius: 6, backgroundColor: "#161616",
+    borderWidth: 1, borderColor: "#242424", alignItems: "center", justifyContent: "center",
+  },
+  shieldBtnText: { fontSize: 14 },
   addBtn: { backgroundColor: "#10B981", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
   addBtnText: { fontSize: 11, fontWeight: "800", color: "#000", letterSpacing: 0.5 },
 

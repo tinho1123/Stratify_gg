@@ -3,6 +3,8 @@ import { getRatingColor, STATUS_COLOR, STATUS_LABEL_KEY } from "@/constants/play
 import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { hasCompleteShield } from "@/lib/shield";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -47,6 +49,7 @@ interface Team {
   premium_credits: number;
   login_streak_count: number;
   last_login_reward_at: string | null;
+  equipped_cosmetics: Record<string, string>;
 }
 
 interface Notification {
@@ -151,8 +154,24 @@ export default function HomeScreen() {
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [, setTick] = useState(0);
   const [claimingDaily, setClaimingDaily] = useState(false);
+  const [shieldBannerDismissed, setShieldBannerDismissed] = useState(true);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
+
+  useEffect(() => {
+    if (!team?.id) return;
+    AsyncStorage.getItem(`stratify_shield_banner_dismissed_${team.id}`).then((v) => {
+      setShieldBannerDismissed(v === "1");
+    });
+  }, [team?.id]);
+
+  const dismissShieldBanner = () => {
+    if (!team?.id) return;
+    setShieldBannerDismissed(true);
+    AsyncStorage.setItem(`stratify_shield_banner_dismissed_${team.id}`, "1").catch(() => {});
+  };
+
+  const showShieldBanner = !!team && !shieldBannerDismissed && !hasCompleteShield(team.equipped_cosmetics);
 
   const loadNotifications = useCallback(() => {
     // Checa se alguma partida agendada já passou do horário e, se sim, gera a notificação
@@ -182,7 +201,7 @@ export default function HomeScreen() {
     ]).then(() => {
       supabase
         .from("teams")
-        .select("id, name, budget, ranking, fans, wins, losses, pdl, premium_credits, login_streak_count, last_login_reward_at")
+        .select("id, name, budget, ranking, fans, wins, losses, pdl, premium_credits, login_streak_count, last_login_reward_at, equipped_cosmetics")
         .single()
         .then(({ data, error }) => {
           if (!error && data) {
@@ -193,6 +212,7 @@ export default function HomeScreen() {
               premium_credits: d.premium_credits ?? 0,
               login_streak_count: d.login_streak_count ?? 0,
               last_login_reward_at: d.last_login_reward_at ?? null,
+              equipped_cosmetics: d.equipped_cosmetics ?? {},
             } as Team);
             supabase
               .from("players")
@@ -377,6 +397,24 @@ export default function HomeScreen() {
         </Modal>
 
         <View style={styles.content}>
+
+          {/* ── BANNER: CRIAR ESCUDO DO TIME ─────────────────── */}
+          {showShieldBanner && (
+            <TouchableOpacity
+              style={styles.shieldBanner}
+              activeOpacity={0.85}
+              onPress={() => router.push("/dashboard/manage_team/shield")}
+            >
+              <Text style={styles.shieldBannerIcon}>🛡️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.shieldBannerTitle}>{t("dashboard.shieldBannerTitle")}</Text>
+                <Text style={styles.shieldBannerSubtitle}>{t("dashboard.shieldBannerSubtitle")}</Text>
+              </View>
+              <TouchableOpacity onPress={dismissShieldBanner} hitSlop={10}>
+                <Text style={styles.shieldBannerClose}>✕</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
 
           {/* ── HERO — PRÓXIMA PARTIDA ──────────────────────── */}
           <LinearGradient
@@ -797,6 +835,22 @@ const styles = StyleSheet.create({
     color: "#D1D5DB",
     fontSize: 13,
   },
+
+  // Banner: criar escudo do time
+  shieldBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#0D1F16",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#1A3D2A",
+    padding: 14,
+  },
+  shieldBannerIcon: { fontSize: 22 },
+  shieldBannerTitle: { fontSize: 12, fontWeight: "800", color: C.textPrimary },
+  shieldBannerSubtitle: { fontSize: 11, color: C.textMuted, marginTop: 2 },
+  shieldBannerClose: { fontSize: 14, color: C.textMuted, padding: 4 },
 
   // Hero
   heroCard: {

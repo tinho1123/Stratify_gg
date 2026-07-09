@@ -128,12 +128,22 @@ export default function GuildHomeScreen() {
         title={t("guild.headerTitle")}
         centered
         right={
-          <TouchableOpacity style={s.invitesBtn} onPress={() => router.push("/dashboard/guild/invites" as any)}>
-            <Text style={s.invitesIcon}>✉️</Text>
-            {pendingInvites > 0 && (
-              <View style={s.invitesBadge}><Text style={s.invitesBadgeText}>{pendingInvites}</Text></View>
+          <View style={{ flexDirection: "row", gap: 6 }}>
+            {guild && guild.my_role !== "member" && (
+              <TouchableOpacity
+                style={s.invitesBtn}
+                onPress={() => router.push({ pathname: "/dashboard/guild/shield", params: { guildId: guild.guild_id } } as any)}
+              >
+                <Text style={s.invitesIcon}>🛡️</Text>
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+            <TouchableOpacity style={s.invitesBtn} onPress={() => router.push("/dashboard/guild/invites" as any)}>
+              <Text style={s.invitesIcon}>✉️</Text>
+              {pendingInvites > 0 && (
+                <View style={s.invitesBadge}><Text style={s.invitesBadgeText}>{pendingInvites}</Text></View>
+              )}
+            </TouchableOpacity>
+          </View>
         }
       />
 
