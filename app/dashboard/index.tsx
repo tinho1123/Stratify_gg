@@ -1,14 +1,16 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { getRatingColor, STATUS_COLOR, STATUS_LABEL_KEY } from "@/constants/playerStatus";
 import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { hasCompleteShield } from "@/lib/shield";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -155,6 +157,33 @@ export default function HomeScreen() {
   const [, setTick] = useState(0);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [shieldBannerDismissed, setShieldBannerDismissed] = useState(true);
+
+  // ── Tutorial guiado ─────────────────────────────────────────────────────
+  const scrollRef = useRef<ScrollView>(null);
+  const topHeaderRef = useRef<View>(null);
+  const heroCardRef = useRef<View>(null);
+  const kpiGridRef = useRef<View>(null);
+  const rosterCardRef = useRef<View>(null);
+  const actionsGridRef = useRef<View>(null);
+  const performanceCardRef = useRef<View>(null);
+
+  const tutorialSteps: TutorialStepDef[] = [
+    { ref: null, title: t("tutorial.step1Title"), desc: t("tutorial.step1Desc") },
+    { ref: topHeaderRef, title: t("tutorial.step2Title"), desc: t("tutorial.step2Desc") },
+    { ref: heroCardRef, title: t("tutorial.step3Title"), desc: t("tutorial.step3Desc") },
+    { ref: kpiGridRef, title: t("tutorial.step4Title"), desc: t("tutorial.step4Desc") },
+    { ref: rosterCardRef, title: t("tutorial.step5Title"), desc: t("tutorial.step5Desc") },
+    { ref: actionsGridRef, title: t("tutorial.step6Title"), desc: t("tutorial.step6Desc") },
+    { ref: performanceCardRef, title: t("tutorial.step7Title"), desc: t("tutorial.step7Desc") },
+    { ref: null, title: t("tutorial.step8Title"), desc: t("tutorial.step8Desc") },
+  ];
+
+  const tutorial = useScreenTutorial({
+    id: "dashboard",
+    steps: tutorialSteps,
+    ready: !loadingPlayers && !!team,
+    scrollRef,
+  });
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -305,10 +334,16 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.container}
+        showsVerticalScrollIndicator={false}
+        onScroll={tutorial.onScroll}
+        scrollEventThrottle={16}
+      >
 
         {/* ── TOP HEADER ───────────────────────────────────── */}
-        <View style={styles.topHeader}>
+        <View style={styles.topHeader} ref={topHeaderRef} collapsable={false}>
           <View style={styles.topHeaderLeft}>
             <View style={styles.logoDot} />
             <Text style={styles.logoText}>STRATIFY</Text>
@@ -417,52 +452,54 @@ export default function HomeScreen() {
           )}
 
           {/* ── HERO — PRÓXIMA PARTIDA ──────────────────────── */}
-          <LinearGradient
-            colors={["#0D1F16", "#111111"]}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroBorderGlow} pointerEvents="none" />
+          <View ref={heroCardRef} collapsable={false}>
+            <LinearGradient
+              colors={["#0D1F16", "#111111"]}
+              style={styles.heroCard}
+            >
+              <View style={styles.heroBorderGlow} pointerEvents="none" />
 
-            <View style={styles.heroBadge}>
-              <View style={styles.heroBadgeDot} />
-              <Text style={styles.heroBadgeText}>{t("dashboard.nextMatch")}</Text>
-            </View>
-
-            {nextMatch ? (
-              <>
-                <Text style={styles.heroTitle}>
-                  {nextMatch.match_type?.toUpperCase() ?? "PARTIDA"}
-                </Text>
-                <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
-
-                <View style={styles.countdown}>
-                  {calcCountdown(nextMatch.scheduled_for).map((item, i) => (
-                    <React.Fragment key={i}>
-                      {i > 0 && <Text style={styles.countdownSep}>:</Text>}
-                      <View style={styles.countdownBox}>
-                        <Text style={styles.countdownNum}>{String(item.v).padStart(2, "0")}</Text>
-                        <Text style={styles.countdownLbl}>{t(item.key)}</Text>
-                      </View>
-                    </React.Fragment>
-                  ))}
-                </View>
-
-                <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
-                  <Text style={styles.heroLink}>{t("dashboard.viewDetails")}</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <View style={styles.heroEmpty}>
-                <Text style={styles.heroEmptyText}>{t("dashboard.noMatchScheduled")}</Text>
-                <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
-                  <Text style={styles.heroLink}>{t("dashboard.scheduleMatch")}</Text>
-                </TouchableOpacity>
+              <View style={styles.heroBadge}>
+                <View style={styles.heroBadgeDot} />
+                <Text style={styles.heroBadgeText}>{t("dashboard.nextMatch")}</Text>
               </View>
-            )}
-          </LinearGradient>
+
+              {nextMatch ? (
+                <>
+                  <Text style={styles.heroTitle}>
+                    {nextMatch.match_type?.toUpperCase() ?? "PARTIDA"}
+                  </Text>
+                  <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
+
+                  <View style={styles.countdown}>
+                    {calcCountdown(nextMatch.scheduled_for).map((item, i) => (
+                      <React.Fragment key={i}>
+                        {i > 0 && <Text style={styles.countdownSep}>:</Text>}
+                        <View style={styles.countdownBox}>
+                          <Text style={styles.countdownNum}>{String(item.v).padStart(2, "0")}</Text>
+                          <Text style={styles.countdownLbl}>{t(item.key)}</Text>
+                        </View>
+                      </React.Fragment>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
+                    <Text style={styles.heroLink}>{t("dashboard.viewDetails")}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.heroEmpty}>
+                  <Text style={styles.heroEmptyText}>{t("dashboard.noMatchScheduled")}</Text>
+                  <TouchableOpacity onPress={() => router.push("/dashboard/matches")}>
+                    <Text style={styles.heroLink}>{t("dashboard.scheduleMatch")}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </LinearGradient>
+          </View>
 
           {/* ── KPI GRID 2×2 ─────────────────────────────────── */}
-          <View style={styles.kpiGrid}>
+          <View style={styles.kpiGrid} ref={kpiGridRef} collapsable={false}>
             {kpis.map((kpi, i) => (
               <View key={i} style={styles.kpiCard}>
                 <Text style={styles.kpiValue}>{kpi.value}</Text>
@@ -524,7 +561,7 @@ export default function HomeScreen() {
           })()}
 
           {/* ── TIME PRINCIPAL ───────────────────────────────── */}
-          <View style={styles.card}>
+          <View style={styles.card} ref={rosterCardRef} collapsable={false}>
             {/* Section header */}
             <View style={styles.sectionRow}>
               <Text style={styles.sectionEyebrow}>{t("dashboard.mainTeam")}</Text>
@@ -574,7 +611,7 @@ export default function HomeScreen() {
           </View>
 
           {/* ── AÇÕES RÁPIDAS ────────────────────────────────── */}
-          <View>
+          <View ref={actionsGridRef} collapsable={false}>
             <Text style={styles.sectionEyebrow}>{t("dashboard.quickActions")}</Text>
             <View style={styles.actionsGrid}>
               {[
@@ -607,7 +644,7 @@ export default function HomeScreen() {
           </View>
 
           {/* ── PERFORMANCE ──────────────────────────────────── */}
-          <View style={styles.card}>
+          <View style={styles.card} ref={performanceCardRef} collapsable={false}>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionEyebrow}>{t("dashboard.performance")}</Text>
             </View>
@@ -630,6 +667,21 @@ export default function HomeScreen() {
 
         <View style={{ height: 32 }} />
       </ScrollView>
+
+      <TutorialOverlay
+        visible={tutorial.active}
+        stepIndex={tutorial.step}
+        totalSteps={tutorialSteps.length}
+        title={tutorialSteps[tutorial.step].title}
+        description={tutorialSteps[tutorial.step].desc}
+        spotlight={tutorial.spotlight}
+        onNext={tutorial.next}
+        onSkip={tutorial.skip}
+        isLast={tutorial.isLast}
+        nextLabel={t("tutorial.next")}
+        finishLabel={t("tutorial.finish")}
+        skipLabel={t("tutorial.skip")}
+      />
     </SafeAreaView>
   );
 }

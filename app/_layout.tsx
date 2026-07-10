@@ -3,6 +3,7 @@ import { UpdateRequiredScreen } from "@/components/ui/UpdateRequiredScreen";
 import { supabase } from "@/database/supabase";
 import { FeatureFlagsProvider } from "@/hooks/useFeatureFlags";
 import { useMinVersionCheck } from "@/hooks/useMinVersionCheck";
+import { TutorialProvider } from "@/hooks/useTutorial";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 import { registerForPushNotifications } from "@/services/notifications";
 import { configureRevenueCat } from "@/services/revenuecat";
@@ -91,18 +92,20 @@ function RootLayout() {
   return (
     <LanguageProvider>
       <FeatureFlagsProvider>
-        <AppAlertProvider>
-          <ThemeProvider value={DarkTheme}>
-            <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
-              <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="login" options={{ headerShown: false }} />
-              <Stack.Screen name="setup/team" options={{ headerShown: false }} />
-              <Stack.Screen name="setup/shield" options={{ headerShown: false }} />
-              <Stack.Screen name="dashboard" options={{ headerShown: false }} />
-            </Stack>
-            <StatusBar style="auto" />
-          </ThemeProvider>
-        </AppAlertProvider>
+        <TutorialProvider>
+          <AppAlertProvider>
+            <ThemeProvider value={DarkTheme}>
+              <Stack initialRouteName="login" screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen name="login" options={{ headerShown: false }} />
+                <Stack.Screen name="setup/team" options={{ headerShown: false }} />
+                <Stack.Screen name="setup/shield" options={{ headerShown: false }} />
+                <Stack.Screen name="dashboard" options={{ headerShown: false }} />
+              </Stack>
+              <StatusBar style="auto" />
+            </ThemeProvider>
+          </AppAlertProvider>
+        </TutorialProvider>
       </FeatureFlagsProvider>
     </LanguageProvider>
   );

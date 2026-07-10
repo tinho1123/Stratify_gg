@@ -1,8 +1,10 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { getTierInfo, TierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
+import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -127,6 +129,29 @@ export default function MatchesScreen() {
 
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0, expired: false });
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Tutorial guiado ─────────────────────────────────────────────────────
+  const scrollRef = useRef<ScrollView>(null);
+  const tierCardRef = useRef<View>(null);
+  const nextMatchRef = useRef<View>(null);
+  const perfCardRef = useRef<View>(null);
+  const historyRef = useRef<View>(null);
+
+  const tutorialSteps: TutorialStepDef[] = [
+    { ref: null, title: t("tutorial.matches.step1Title"), desc: t("tutorial.matches.step1Desc") },
+    { ref: tierCardRef, title: t("tutorial.matches.step2Title"), desc: t("tutorial.matches.step2Desc") },
+    { ref: nextMatchRef, title: t("tutorial.matches.step3Title"), desc: t("tutorial.matches.step3Desc") },
+    { ref: perfCardRef, title: t("tutorial.matches.step4Title"), desc: t("tutorial.matches.step4Desc") },
+    { ref: historyRef, title: t("tutorial.matches.step5Title"), desc: t("tutorial.matches.step5Desc") },
+    { ref: null, title: t("tutorial.matches.step6Title"), desc: t("tutorial.matches.step6Desc") },
+  ];
+
+  const tutorial = useScreenTutorial({
+    id: "matches",
+    steps: tutorialSteps,
+    ready: !loading && !!team,
+    scrollRef,
+  });
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -254,10 +279,16 @@ export default function MatchesScreen() {
           <Text style={s.loadingText}>{t("common.loading")}</Text>
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 48 }}>
+        <ScrollView
+          ref={scrollRef}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 48 }}
+          onScroll={tutorial.onScroll}
+          scrollEventThrottle={16}
+        >
 
           {/* ══ TIER CARD ════════════════════════════════ */}
-          <View style={s.section}>
+          <View style={s.section} ref={tierCardRef} collapsable={false}>
             <TierCard info={tierInfo} wins={team?.wins ?? 0} losses={team?.losses ?? 0} />
           </View>
 
@@ -290,7 +321,7 @@ export default function MatchesScreen() {
           )}
 
           {/* ══ PRÓXIMA PARTIDA ══════════════════════════ */}
-          <View style={s.section}>
+          <View style={s.section} ref={nextMatchRef} collapsable={false}>
             <Text style={s.sectionTitle}>{t("matches.nextMatchTitle")}</Text>
 
             {upcoming ? (
@@ -396,7 +427,7 @@ export default function MatchesScreen() {
           </View>
 
           {/* ══ DESEMPENHO ═══════════════════════════════ */}
-          <View style={s.section}>
+          <View style={s.section} ref={perfCardRef} collapsable={false}>
             <Text style={s.sectionTitle}>{t("matches.performanceTitle")}</Text>
             <View style={s.perfCard}>
               <View style={s.winRateWrap}>
@@ -441,7 +472,7 @@ export default function MatchesScreen() {
           </View>
 
           {/* ══ HISTÓRICO ════════════════════════════════ */}
-          <View style={s.section}>
+          <View style={s.section} ref={historyRef} collapsable={false}>
             <Text style={s.sectionTitle}>{t("matches.historyTitle")}</Text>
 
             {history.length === 0 ? (
@@ -507,6 +538,21 @@ export default function MatchesScreen() {
 
         </ScrollView>
       )}
+
+      <TutorialOverlay
+        visible={tutorial.active}
+        stepIndex={tutorial.step}
+        totalSteps={tutorialSteps.length}
+        title={tutorialSteps[tutorial.step].title}
+        description={tutorialSteps[tutorial.step].desc}
+        spotlight={tutorial.spotlight}
+        onNext={tutorial.next}
+        onSkip={tutorial.skip}
+        isLast={tutorial.isLast}
+        nextLabel={t("tutorial.next")}
+        finishLabel={t("tutorial.finish")}
+        skipLabel={t("tutorial.skip")}
+      />
 
     </SafeAreaView>
   );
