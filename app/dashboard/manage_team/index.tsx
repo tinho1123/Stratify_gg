@@ -1,5 +1,7 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { supabase } from "@/database/supabase";
+import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
@@ -265,6 +267,31 @@ export default function ManageTeamScreen() {
   const [renewing, setRenewing] = useState(false);
   const [signingRole, setSigningRole] = useState<string | null>(null);
 
+  // ── Tutorial guiado ─────────────────────────────────────────────────────
+  const scrollRef = useRef<ScrollView>(null);
+  const headerRef = useRef<View>(null);
+  const actionsRef = useRef<View>(null);
+  const freeAgentRef = useRef<View>(null);
+  const rosterListRef = useRef<View>(null);
+
+  const tutorialSteps: TutorialStepDef[] = [
+    { ref: null, title: t("tutorial.manageTeam.step1Title"), desc: t("tutorial.manageTeam.step1Desc") },
+    { ref: headerRef, title: t("tutorial.manageTeam.step2Title"), desc: t("tutorial.manageTeam.step2Desc") },
+    { ref: actionsRef, title: t("tutorial.manageTeam.step3Title"), desc: t("tutorial.manageTeam.step3Desc") },
+    { ref: rosterListRef, title: t("tutorial.manageTeam.step4Title"), desc: t("tutorial.manageTeam.step4Desc") },
+    ...(!loading && players.length < 5
+      ? [{ ref: freeAgentRef, title: t("tutorial.manageTeam.step5Title"), desc: t("tutorial.manageTeam.step5Desc") }]
+      : []),
+    { ref: null, title: t("tutorial.manageTeam.step6Title"), desc: t("tutorial.manageTeam.step6Desc") },
+  ];
+
+  const tutorial = useScreenTutorial({
+    id: "manageTeam",
+    steps: tutorialSteps,
+    ready: !loading,
+    scrollRef,
+  });
+
   // Pull-down-to-close: só fecha o modal quando o ScrollView já está no topo
   // (senão o gesto seria confundido com o próprio scroll do conteúdo).
   const modalScrollYRef = useRef(0);
@@ -342,7 +369,6 @@ export default function ManageTeamScreen() {
       if (error) {
         console.error("[openPlayer] erro ao buscar skills:", error);
       } else if (data) {
-        console.log("[openPlayer] skills recebidas:", data.length, data);
         const updated = { ...player, skills: data as unknown as PlayerSkill[] };
         setSelected(updated);
         setPlayers((prev) => prev.map((p) => (p.id === player.id ? updated : p)));
@@ -456,7 +482,7 @@ export default function ManageTeamScreen() {
     <SafeAreaView style={s.safe} edges={["top"]}>
 
       {/* ── HEADER ─────────────────────────────────────────── */}
-      <View style={s.header}>
+      <View style={s.header} ref={headerRef} collapsable={false}>
         <View style={s.headerTop}>
           <Text style={s.headerTitle}>{t("manageTeam.headerTitle")}</Text>
           <View style={s.headerActions}>
@@ -502,10 +528,17 @@ export default function ManageTeamScreen() {
       </View>
 
       {/* ── PLAYER LIST ────────────────────────────────────── */}
-      <ScrollView style={s.list} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 32 }}>
+      <ScrollView
+        ref={scrollRef}
+        style={s.list}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        onScroll={tutorial.onScroll}
+        scrollEventThrottle={16}
+      >
 
         {/* Quick actions */}
-        <View style={s.actions}>
+        <View style={s.actions} ref={actionsRef} collapsable={false}>
           {[
             { icon: "🎯", label: t("dashboard.actionTrain"),   route: "/dashboard/training" },
             { icon: "📋", label: t("dashboard.actionTactics"), route: "/dashboard/tactics" },
@@ -523,7 +556,7 @@ export default function ManageTeamScreen() {
         </View>
 
         {!loading && players.length < 5 && (
-          <View style={s.freeAgentCard}>
+          <View style={s.freeAgentCard} ref={freeAgentRef} collapsable={false}>
             <Text style={s.freeAgentTitle}>{t("manageTeam.freeAgentTitle")}</Text>
             <Text style={s.freeAgentSub}>
               {t("manageTeam.freeAgentSub")} ({players.length}/5)
@@ -547,6 +580,7 @@ export default function ManageTeamScreen() {
           </View>
         )}
 
+        <View ref={rosterListRef} collapsable={false}>
         <Text style={s.sectionTitle}>{t("manageTeam.sectionPlayers")}</Text>
 
         {loading ? (
@@ -644,6 +678,7 @@ export default function ManageTeamScreen() {
             );
           })
         )}
+        </View>
       </ScrollView>
 
       {/* ── PLAYER MODAL ───────────────────────────────────── */}
@@ -934,6 +969,21 @@ export default function ManageTeamScreen() {
           </View>
         </View>
       </Modal>
+
+      <TutorialOverlay
+        visible={tutorial.active}
+        stepIndex={tutorial.step}
+        totalSteps={tutorialSteps.length}
+        title={tutorialSteps[tutorial.step].title}
+        description={tutorialSteps[tutorial.step].desc}
+        spotlight={tutorial.spotlight}
+        onNext={tutorial.next}
+        onSkip={tutorial.skip}
+        isLast={tutorial.isLast}
+        nextLabel={t("tutorial.next")}
+        finishLabel={t("tutorial.finish")}
+        skipLabel={t("tutorial.skip")}
+      />
     </SafeAreaView>
   );
 }
