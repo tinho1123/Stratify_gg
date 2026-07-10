@@ -51,6 +51,14 @@ Deno.serve(async (req: Request) => {
     return new Response("no_token", { status: 200 });
   }
 
+  // `collapse_key` (ex.: "match:league:<fixture_id>") identifica notificações da mesma sessão
+  // de partida (início/progresso/resultado, inseridas pelas funções system_* do motor de
+  // partidas) — repassado no payload pro app conseguir, ao receber, atualizar/substituir uma
+  // notificação anterior da mesma partida em vez de empilhar uma nova a cada progresso. NOTA:
+  // a Expo Push API não documenta um campo de colapso nativo garantido (equivalente a
+  // apns-collapse-id/FCM collapse_key) — validar contra a doc atual da Expo antes de contar com
+  // substituição automática na bandeja em todas as plataformas; até lá, isso garante pelo menos
+  // que o app (em foreground/ao tocar na notificação) sabe agrupar/atualizar pela mesma chave.
   await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -60,6 +68,7 @@ Deno.serve(async (req: Request) => {
       body: record.message,
       sound: "default",
       priority: "high",
+      ...(record.collapse_key ? { channelId: "match-updates", data: { collapse_key: record.collapse_key, related_id: record.related_id ?? null } } : {}),
     }),
   });
 

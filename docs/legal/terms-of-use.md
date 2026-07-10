@@ -97,7 +97,7 @@ other players via chat.
 
 ## 2. Account
 
-You must be at least 16 years old to create an account. You're
+You must be at least 14 years old to create an account. You're
 responsible for keeping your password confidential and for all activity on your
 account. We may suspend or terminate accounts that violate these Terms, without prior
 notice in cases of serious abuse.

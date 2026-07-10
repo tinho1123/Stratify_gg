@@ -1,6 +1,8 @@
 import { RewardedAdButton } from "@/components/ui/RewardedAdButton";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
+import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { supabase } from "@/database/supabase";
+import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -134,6 +136,29 @@ export default function MarketScreen() {
 
   const [, setTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Tutorial guiado ─────────────────────────────────────────────────────
+  const scrollRef = useRef<ScrollView>(null);
+  const budgetRef = useRef<View>(null);
+  const tabBarRef = useRef<View>(null);
+  const searchRowRef = useRef<View>(null);
+  const listingsRef = useRef<View>(null);
+
+  const tutorialSteps: TutorialStepDef[] = [
+    { ref: null, title: t("tutorial.market.step1Title"), desc: t("tutorial.market.step1Desc") },
+    { ref: budgetRef, title: t("tutorial.market.step2Title"), desc: t("tutorial.market.step2Desc") },
+    { ref: tabBarRef, title: t("tutorial.market.step3Title"), desc: t("tutorial.market.step3Desc") },
+    { ref: searchRowRef, title: t("tutorial.market.step4Title"), desc: t("tutorial.market.step4Desc") },
+    { ref: listingsRef, title: t("tutorial.market.step5Title"), desc: t("tutorial.market.step5Desc") },
+    { ref: null, title: t("tutorial.market.step6Title"), desc: t("tutorial.market.step6Desc") },
+  ];
+
+  const tutorial = useScreenTutorial({
+    id: "market",
+    steps: tutorialSteps,
+    ready: !loading,
+    scrollRef,
+  });
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
@@ -387,7 +412,7 @@ export default function MarketScreen() {
         title={t("market.headerTitle")}
         dotColor="#10B981"
         right={
-          <View style={s.budgetPill}>
+          <View style={s.budgetPill} ref={budgetRef} collapsable={false}>
             <Text style={s.budgetLabel}>{t("market.budgetLabel")}</Text>
             <Text style={s.budgetValue}>{budget !== null ? fmtPrice(budget) : "—"}</Text>
           </View>
@@ -395,7 +420,7 @@ export default function MarketScreen() {
       />
 
       {/* ── TAB BAR ────────────────────────────────────── */}
-      <View style={s.tabBar}>
+      <View style={s.tabBar} ref={tabBarRef} collapsable={false}>
         {(["buy", "sell"] as MarketTab[]).map((tab) => (
           <TouchableOpacity
             key={tab}
@@ -435,7 +460,7 @@ export default function MarketScreen() {
         ════════════════════════════════════════════════ */
         <>
           {/* Search */}
-          <View style={s.searchRow}>
+          <View style={s.searchRow} ref={searchRowRef} collapsable={false}>
             <View style={s.searchWrap}>
               <Text style={s.searchIcon}>🔍</Text>
               <TextInput
@@ -501,8 +526,14 @@ export default function MarketScreen() {
           )}
 
           {/* Listings */}
-          <ScrollView style={s.list} showsVerticalScrollIndicator={false}>
-            <View style={s.listInner}>
+          <ScrollView
+            ref={scrollRef}
+            style={s.list}
+            showsVerticalScrollIndicator={false}
+            onScroll={tutorial.onScroll}
+            scrollEventThrottle={16}
+          >
+            <View style={s.listInner} ref={listingsRef} collapsable={false}>
 
               {filtered.length === 0 ? (
                 <View style={s.emptyCard}>
@@ -1093,6 +1124,21 @@ export default function MarketScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <TutorialOverlay
+        visible={tutorial.active}
+        stepIndex={tutorial.step}
+        totalSteps={tutorialSteps.length}
+        title={tutorialSteps[tutorial.step].title}
+        description={tutorialSteps[tutorial.step].desc}
+        spotlight={tutorial.spotlight}
+        onNext={tutorial.next}
+        onSkip={tutorial.skip}
+        isLast={tutorial.isLast}
+        nextLabel={t("tutorial.next")}
+        finishLabel={t("tutorial.finish")}
+        skipLabel={t("tutorial.skip")}
+      />
 
     </SafeAreaView>
   );

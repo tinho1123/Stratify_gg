@@ -1,4 +1,5 @@
 import { supabase } from "@/database/supabase";
+import { useTutorial } from "@/hooks/useTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { LANGUAGE_LABELS, Language } from "@/i18n/translations";
 import { router } from "expo-router";
@@ -18,6 +19,7 @@ const DISCORD_URL = "https://discord.gg/rb8FfsSzu";
 
 export default function ProfileScreen() {
   const { language, setLanguage, t } = useLanguage();
+  const { requestReplay } = useTutorial();
   const [email, setEmail] = useState<string | null>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,26 @@ export default function ProfileScreen() {
     setLoggingOut(true);
     await supabase.auth.signOut();
     router.replace("/login");
+  };
+
+  const handleReplayDashboardTutorial = () => {
+    requestReplay("dashboard");
+    router.back();
+  };
+
+  const handleReplayMatchesTutorial = () => {
+    requestReplay("matches");
+    router.push("/dashboard/matches");
+  };
+
+  const handleReplayMarketTutorial = () => {
+    requestReplay("market");
+    router.push("/dashboard/market");
+  };
+
+  const handleReplayManageTeamTutorial = () => {
+    requestReplay("manageTeam");
+    router.push("/dashboard/manage_team");
   };
 
   if (loading) {
@@ -121,6 +143,59 @@ export default function ProfileScreen() {
               <Text style={styles.securityDesc}>{t("profile.securityDesc")}</Text>
             </View>
           </View>
+        </View>
+
+        {/* Help Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t("profile.helpSection")}</Text>
+          <TouchableOpacity
+            style={styles.tutorialCard}
+            onPress={handleReplayDashboardTutorial}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.tutorialIcon}>🧭</Text>
+            <View style={styles.tutorialContent}>
+              <Text style={styles.tutorialTitle}>{t("profile.replayTutorialTitle")}</Text>
+              <Text style={styles.tutorialDesc}>{t("profile.replayTutorialDesc")}</Text>
+            </View>
+            <Text style={styles.tutorialArrow}>→</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tutorialCard, { marginTop: 10 }]}
+            onPress={handleReplayMatchesTutorial}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.tutorialIcon}>🎮</Text>
+            <View style={styles.tutorialContent}>
+              <Text style={styles.tutorialTitle}>{t("profile.replayMatchesTutorialTitle")}</Text>
+              <Text style={styles.tutorialDesc}>{t("profile.replayMatchesTutorialDesc")}</Text>
+            </View>
+            <Text style={styles.tutorialArrow}>→</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tutorialCard, { marginTop: 10 }]}
+            onPress={handleReplayMarketTutorial}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.tutorialIcon}>🏪</Text>
+            <View style={styles.tutorialContent}>
+              <Text style={styles.tutorialTitle}>{t("profile.replayMarketTutorialTitle")}</Text>
+              <Text style={styles.tutorialDesc}>{t("profile.replayMarketTutorialDesc")}</Text>
+            </View>
+            <Text style={styles.tutorialArrow}>→</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tutorialCard, { marginTop: 10 }]}
+            onPress={handleReplayManageTeamTutorial}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.tutorialIcon}>👥</Text>
+            <View style={styles.tutorialContent}>
+              <Text style={styles.tutorialTitle}>{t("profile.replayManageTeamTutorialTitle")}</Text>
+              <Text style={styles.tutorialDesc}>{t("profile.replayManageTeamTutorialDesc")}</Text>
+            </View>
+            <Text style={styles.tutorialArrow}>→</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Community Section */}
@@ -343,6 +418,38 @@ const styles = StyleSheet.create({
   },
   discordArrow: {
     color: "#5865F2",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  tutorialCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(16,185,129,0.08)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#10B981",
+    padding: 16,
+    gap: 12,
+  },
+  tutorialIcon: {
+    fontSize: 24,
+  },
+  tutorialContent: {
+    flex: 1,
+  },
+  tutorialTitle: {
+    color: "#10B981",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  tutorialDesc: {
+    color: "#6B7280",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  tutorialArrow: {
+    color: "#10B981",
     fontSize: 18,
     fontWeight: "700",
   },

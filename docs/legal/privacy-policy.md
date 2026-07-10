@@ -141,7 +141,7 @@ Dúvidas, solicitações ou reclamações sobre esta política: carvalho.cwell@g
 
 # Privacy Policy — Stratify (English)
 
-**Last updated:** 2026-07-07
+**Last updated:** 2026-07-08
 
 This Privacy Policy explains how **Stratify** ("we", "the app") collects, uses, stores
 and shares personal data, in line with Brazil's LGPD and, where applicable, GDPR

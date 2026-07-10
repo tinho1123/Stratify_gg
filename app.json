@@ -8,6 +8,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "icon": "./assets/images/icon.png",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/91761390-296f-4d29-8cd2-2fca8838a5fc"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "gg.stratify.app"
@@ -54,6 +60,13 @@
         "expo-tracking-transparency",
         {
           "userTrackingPermission": "Usamos esse identificador para mostrar anúncios mais relevantes e medir o desempenho das campanhas. Seus dados de jogo continuam privados."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "wellington-carvalho-da-cunha-f",
+          "project": "react-native-stratify"
         }
       ]
     ],

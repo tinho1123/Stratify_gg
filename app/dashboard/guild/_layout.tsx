@@ -9,6 +9,7 @@ export default function GuildLayout() {
       <Stack.Screen name="browse" options={{ title: "Buscar Guilda" }} />
       <Stack.Screen name="invites" options={{ title: "Convites" }} />
       <Stack.Screen name="[id]" options={{ title: "Perfil da Guilda" }} />
+      <Stack.Screen name="shield" options={{ title: "Escudo da Guilda" }} />
     </Stack>
   );
 }
