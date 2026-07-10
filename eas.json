@@ -23,7 +23,7 @@
     "production": {
       "android": {
         "serviceAccountKeyPath": "./google-play-submit-service-account.json",
-        "track": "internal"
+        "track": "alpha"
       }
     }
   }
