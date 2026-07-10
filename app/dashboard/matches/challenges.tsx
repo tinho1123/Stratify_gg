@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { LiveScorePill } from "@/components/ui/LiveScorePill";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
@@ -30,7 +31,7 @@ interface TeamChallenge {
   challenger_name: string;
   opponent_team_id: string;
   opponent_name: string;
-  status: "pending" | "accepted" | "declined" | "expired" | "played";
+  status: "pending" | "accepted" | "declined" | "expired" | "live" | "played";
   scheduled_for: string | null;
   score_challenger: number | null;
   score_opponent: number | null;
@@ -56,7 +57,6 @@ export default function ChallengesScreen() {
 
   const [challengingId, setChallengingId] = useState<string | null>(null);
   const [respondingId, setRespondingId]   = useState<string | null>(null);
-  const [resolvingId, setResolvingId]     = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,6 +92,13 @@ export default function ChallengesScreen() {
 
   useFocusEffect(useCallback(() => { fetchData(); }, [fetchData]));
 
+  // A partida agora progride sozinha no servidor (cron) — sem gatilho de client, a lista
+  // precisa se atualizar por conta própria pra refletir accepted/live/played mudando.
+  useEffect(() => {
+    const timer = setInterval(fetchData, 15_000);
+    return () => clearInterval(timer);
+  }, [fetchData]);
+
   const errorMessage = (err: any, fallbackKey: string): string => {
     const msg = err?.message ?? "";
     if (msg.includes("challenge_already_pending")) return t("challenges.errAlreadyPending");
@@ -115,22 +122,14 @@ export default function ChallengesScreen() {
     fetchData();
   };
 
-  const watchMatch = async (id: string) => {
-    setResolvingId(id);
-    const { error } = await supabase.rpc("resolve_challenge_match", { p_challenge_id: id });
-    setResolvingId(null);
-    if (error) { alert(t("common.error"), t("challenges.errResolveGeneric")); return; }
-    fetchData();
-  };
-
   const incoming = challenges.filter((c) => c.opponent_team_id === myTeamId && c.status === "pending");
   const outgoing = challenges.filter((c) => c.challenger_team_id === myTeamId && c.status === "pending");
-  const accepted = challenges.filter((c) => c.status === "accepted");
+  const accepted = challenges.filter((c) => c.status === "accepted" || c.status === "live");
   const history  = challenges.filter((c) => c.status === "played").slice(0, 10);
 
   const pendingRivalIds = new Set(
     challenges
-      .filter((c) => c.status === "pending" || c.status === "accepted")
+      .filter((c) => c.status === "pending" || c.status === "accepted" || c.status === "live")
       .map((c) => (c.challenger_team_id === myTeamId ? c.opponent_team_id : c.challenger_team_id)),
   );
 
@@ -183,20 +182,15 @@ export default function ChallengesScreen() {
               <Text style={s.sectionTitle}>{t("challenges.acceptedTitle")}</Text>
               {accepted.map((c) => {
                 const opponentName = c.challenger_team_id === myTeamId ? c.opponent_name : c.challenger_name;
-                const canWatch = !!c.scheduled_for && new Date(c.scheduled_for) <= new Date();
+                const dueNotYetLive = c.status === "accepted"
+                  && !!c.scheduled_for && new Date(c.scheduled_for) <= new Date();
                 return (
                   <View key={c.id} style={s.challengeCard}>
                     <Text style={s.challengeName} numberOfLines={1}>{t("challenges.vsPrefix")} {opponentName}</Text>
-                    {canWatch ? (
-                      <TouchableOpacity
-                        style={s.watchBtn}
-                        onPress={() => watchMatch(c.id)}
-                        disabled={resolvingId === c.id}
-                      >
-                        {resolvingId === c.id
-                          ? <ActivityIndicator size="small" color="#EC4899" />
-                          : <Text style={s.watchBtnText}>{t("challenges.watchBtn")}</Text>}
-                      </TouchableOpacity>
+                    {c.status === "live" ? (
+                      <LiveScorePill matchSource="challenge" matchId={c.id} />
+                    ) : dueNotYetLive ? (
+                      <Text style={s.waitingNote}>{t("challenges.startingSoon")}</Text>
                     ) : (
                       <Text style={s.waitingNote}>{t("challenges.waitingTime")}</Text>
                     )}

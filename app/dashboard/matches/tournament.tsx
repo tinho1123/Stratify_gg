@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { LiveScorePill } from "@/components/ui/LiveScorePill";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
@@ -40,7 +41,7 @@ interface TournamentMatch {
   team_b_id: string | null;
   team_a_name: string | null;
   team_b_name: string | null;
-  status: "pending" | "ready" | "played";
+  status: "pending" | "ready" | "live" | "played";
   scheduled_for: string | null;
   score_a: number | null;
   score_b: number | null;
@@ -82,7 +83,6 @@ export default function TournamentScreen() {
 
   const [loading, setLoading]     = useState(true);
   const [joining, setJoining]     = useState(false);
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [tournament, setTournament] = useState<TournamentInfo | null>(null);
   const [entries, setEntries]     = useState<TournamentEntry[]>([]);
   const [matches, setMatches]     = useState<TournamentMatch[]>([]);
@@ -125,6 +125,13 @@ export default function TournamentScreen() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // A partida agora progride sozinha no servidor (cron) — sem gatilho de client, a lista
+  // precisa se atualizar por conta própria pra refletir pending/ready/live/played mudando.
+  useEffect(() => {
+    const timer = setInterval(fetchData, 15_000);
+    return () => clearInterval(timer);
+  }, [fetchData]);
+
   const hasJoined = !!myTeamId && entries.some((e) => e.team_id === myTeamId);
 
   const joinTournament = async () => {
@@ -139,17 +146,6 @@ export default function TournamentScreen() {
         ? t("tournament.errClosed")
         : t("tournament.errJoinGeneric");
       alert(t("common.error"), msg);
-      return;
-    }
-    fetchData();
-  };
-
-  const resolveMatch = async (matchId: string) => {
-    setResolvingId(matchId);
-    const { error } = await supabase.rpc("resolve_tournament_match", { p_match_id: matchId });
-    setResolvingId(null);
-    if (error) {
-      alert(t("common.error"), t("tournament.errResolveGeneric"));
       return;
     }
     fetchData();
@@ -229,7 +225,8 @@ export default function TournamentScreen() {
                     {roundMatches.map((m) => {
                       const isMine = m.team_a_id === myTeamId || m.team_b_id === myTeamId;
                       const played = m.status === "played";
-                      const canWatch = isMine && m.status === "ready"
+                      const isLive = m.status === "live";
+                      const dueNotYetLive = isMine && m.status === "ready"
                         && !!m.scheduled_for && new Date(m.scheduled_for) <= new Date();
                       const aWon = played && m.winner_team_id === m.team_a_id;
                       const bWon = played && m.winner_team_id === m.team_b_id;
@@ -249,18 +246,11 @@ export default function TournamentScreen() {
                             </Text>
                           </View>
 
-                          {canWatch && (
-                            <TouchableOpacity
-                              style={s.watchBtn}
-                              onPress={() => resolveMatch(m.id)}
-                              disabled={resolvingId === m.id}
-                            >
-                              {resolvingId === m.id
-                                ? <ActivityIndicator size="small" color="#EC4899" />
-                                : <Text style={s.watchBtnText}>{t("tournament.watchBtn")}</Text>}
-                            </TouchableOpacity>
+                          {isLive && <LiveScorePill matchSource="tournament" matchId={m.id} />}
+                          {dueNotYetLive && (
+                            <Text style={s.waitingNote}>{t("tournament.startingSoon")}</Text>
                           )}
-                          {isMine && m.status === "ready" && !canWatch && (
+                          {isMine && m.status === "ready" && !dueNotYetLive && (
                             <Text style={s.waitingNote}>{t("tournament.waitingTime")}</Text>
                           )}
                         </View>
