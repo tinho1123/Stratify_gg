@@ -369,7 +369,6 @@ export default function ManageTeamScreen() {
       if (error) {
         console.error("[openPlayer] erro ao buscar skills:", error);
       } else if (data) {
-        console.log("[openPlayer] skills recebidas:", data.length, data);
         const updated = { ...player, skills: data as unknown as PlayerSkill[] };
         setSelected(updated);
         setPlayers((prev) => prev.map((p) => (p.id === player.id ? updated : p)));

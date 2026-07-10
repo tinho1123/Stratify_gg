@@ -18,7 +18,7 @@ Notifications.setNotificationHandler({
 // falha em silêncio e o app segue normal, só sem push.
 export async function registerForPushNotifications(): Promise<void> {
   if (!Device.isDevice) {
-    console.warn("[push] pulado: não é um dispositivo físico (emulador/simulador)");
+    console.log("[push] pulado: não é um dispositivo físico (emulador/simulador)");
     return;
   }
 
@@ -36,18 +36,18 @@ export async function registerForPushNotifications(): Promise<void> {
     finalStatus = status;
   }
   if (finalStatus !== "granted") {
-    console.warn("[push] pulado: permissão de notificação negada");
+    console.log("[push] pulado: permissão de notificação negada");
     return;
   }
 
   try {
     const token = await Notifications.getExpoPushTokenAsync();
-    console.warn("[push] token obtido:", token.data);
+    console.log("[push] token obtido:", token.data);
     const { error } = await supabase.rpc("save_push_token", { p_token: token.data });
     if (error) {
       console.warn("[push] save_push_token falhou:", error.message);
     } else {
-      console.warn("[push] token salvo com sucesso");
+      console.log("[push] token salvo com sucesso");
     }
   } catch (err: any) {
     console.warn("[push] getExpoPushTokenAsync falhou:", err?.message ?? err);
