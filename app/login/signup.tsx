@@ -1,5 +1,6 @@
 import { supabase } from "@/database/supabase";
 import { useLanguage } from "@/i18n/LanguageContext";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -54,7 +55,11 @@ export default function SignupScreen() {
       return;
     }
     setLoading(true);
-    const { data, error: signupError } = await supabase.auth.signUp({ email, password });
+    const { data, error: signupError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: Linking.createURL("login") },
+    });
     setLoading(false);
     if (signupError) {
       setError(signupError.message);

@@ -10,6 +10,8 @@ import { configureRevenueCat } from "@/services/revenuecat";
 import { initializeAds } from "@/services/adsInit";
 import { initSentry, wrapRootComponent } from "@/services/sentryInit";
 import { DarkTheme, ThemeProvider } from "@react-navigation/native";
+import { getQueryParams } from "expo-auth-session/build/QueryParams";
+import * as Linking from "expo-linking";
 import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -20,6 +22,16 @@ import "react-native-reanimated";
 // O mais cedo possível, antes de qualquer render — pra capturar erros que aconteçam
 // durante a montagem inicial do app.
 initSentry();
+
+async function createSessionFromUrl(url: string) {
+  const { params, errorCode } = getQueryParams(url);
+  if (errorCode) return;
+
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) return;
+
+  await supabase.auth.setSession({ access_token, refresh_token });
+}
 
 async function redirectAfterLogin() {
   const { data } = await supabase
@@ -48,6 +60,18 @@ function RootLayout() {
       }
       await initializeAds();
     })();
+  }, []);
+
+  useEffect(() => {
+    Linking.getInitialURL().then((url) => {
+      if (url) createSessionFromUrl(url);
+    });
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      createSessionFromUrl(url);
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
