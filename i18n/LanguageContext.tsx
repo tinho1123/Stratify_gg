@@ -14,7 +14,7 @@ function detectDefaultLanguage(): Language {
     if (first?.regionCode === "BR" || first?.languageCode === "pt") return "pt";
     return "en";
   } catch {
-    return "pt";
+    return "en";
   }
 }
 
