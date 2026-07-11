@@ -1,3 +1,4 @@
+import { MatchupShields } from "@/components/ui/MatchupShields";
 import { OpponentShield } from "@/components/ui/OpponentShield";
 import { RewardedAdButton } from "@/components/ui/RewardedAdButton";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
@@ -116,6 +117,7 @@ export default function LiveMatchScreen() {
   const [loadingBase, setLoadingBase] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
   const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
+  const [ownShield, setOwnShield] = useState<TeamShield | null>(null);
 
   const liveScrollRef = useRef<ScrollView>(null);
   const historyScrollRef = useRef<ScrollView>(null);
@@ -144,11 +146,11 @@ export default function LiveMatchScreen() {
       if (!matchData) { setErrorMsg(t("live.errNoMatchReady")); setLoadingBase(false); return; }
       const m = matchData as MatchInfo;
       setMatch(m);
-      if (m.opponent_team_id) {
-        fetchTeamShields([m.opponent_team_id]).then((shields) => {
-          setOpponentShield(shields[m.opponent_team_id!] ?? null);
-        });
-      }
+      const ownId = (teamData as any).id as string;
+      fetchTeamShields([ownId, m.opponent_team_id]).then((shields) => {
+        setOwnShield(shields[ownId] ?? null);
+        if (m.opponent_team_id) setOpponentShield(shields[m.opponent_team_id] ?? null);
+      });
       setLoadingBase(false);
     })();
   }, [t]);
@@ -271,6 +273,9 @@ export default function LiveMatchScreen() {
 
           <View style={[s.heroCard, won ? s.heroWin : s.heroLoss]}>
             <Text style={s.heroMap}>{match?.map}</Text>
+            <View style={s.matchupRow}>
+              <MatchupShields ownShield={ownShield} opponentShield={opponentShield} size={36} />
+            </View>
             <View style={s.scoreRow}>
               <View style={s.scoreTeam}>
                 <Text style={s.scoreTeamName} numberOfLines={1}>{team.name.toUpperCase()}</Text>
@@ -278,7 +283,6 @@ export default function LiveMatchScreen() {
               </View>
               <Text style={s.scoreDash}>–</Text>
               <View style={s.scoreTeam}>
-                <OpponentShield shield={opponentShield} size={32} />
                 <Text style={s.scoreTeamName} numberOfLines={1}>{match?.opponent_name.toUpperCase()}</Text>
                 <Text style={[s.scoreNum, !won ? s.scoreWin : s.scoreLoss]}>{finalResult.score_opp}</Text>
               </View>
@@ -562,6 +566,7 @@ const s = StyleSheet.create({
   heroWin: { backgroundColor: "#0D1F16", borderColor: "#1A3D2A" },
   heroLoss: { backgroundColor: "#1F0D0D", borderColor: "#3D1A1A" },
   heroMap: { fontSize: 11, fontWeight: "800", color: "#6B7280", letterSpacing: 2, marginBottom: 12 },
+  matchupRow: { marginBottom: 12 },
   scoreRow: { flexDirection: "row", alignItems: "center", gap: 16 },
   scoreTeam: { alignItems: "center", gap: 4, minWidth: 100 },
   scoreTeamName: { fontSize: 11, fontWeight: "800", color: "#9CA3AF" },

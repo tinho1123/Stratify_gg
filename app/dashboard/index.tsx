@@ -1,5 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
-import { OpponentShield } from "@/components/ui/OpponentShield";
+import { MatchupShields } from "@/components/ui/MatchupShields";
 import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { getRatingColor, STATUS_COLOR, STATUS_LABEL_KEY } from "@/constants/playerStatus";
 import { supabase } from "@/database/supabase";
@@ -158,6 +158,7 @@ export default function HomeScreen() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
   const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
+  const [ownShield, setOwnShield] = useState<TeamShield | null>(null);
   const [, setTick] = useState(0);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [shieldBannerDismissed, setShieldBannerDismissed] = useState(true);
@@ -247,6 +248,7 @@ export default function HomeScreen() {
               last_login_reward_at: d.last_login_reward_at ?? null,
               equipped_cosmetics: d.equipped_cosmetics ?? {},
             } as Team);
+            fetchTeamShields([d.id]).then((shields) => setOwnShield(shields[d.id] ?? null));
             supabase
               .from("players")
               .select("id, name, role, status, rating, morale, form, energy")
@@ -482,10 +484,10 @@ export default function HomeScreen() {
                   <Text style={styles.heroTitle}>
                     {nextMatch.match_type?.toUpperCase() ?? "PARTIDA"}
                   </Text>
-                  <View style={styles.heroOpponentRow}>
-                    <OpponentShield shield={opponentShield} size={28} />
-                    <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
+                  <View style={styles.heroMatchupRow}>
+                    <MatchupShields ownShield={ownShield} opponentShield={opponentShield} size={32} />
                   </View>
+                  <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
 
                   <View style={styles.countdown}>
                     {calcCountdown(nextMatch.scheduled_for).map((item, i) => (
@@ -962,17 +964,15 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     lineHeight: 30,
   },
-  heroOpponentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 4,
-    marginBottom: 18,
+  heroMatchupRow: {
+    marginTop: 10,
+    marginBottom: 8,
   },
   heroOpponent: {
     fontSize: 14,
     fontWeight: "500",
     color: C.textSecondary,
+    marginBottom: 18,
   },
   countdown: {
     flexDirection: "row",

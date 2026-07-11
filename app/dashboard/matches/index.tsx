@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { MatchupShields } from "@/components/ui/MatchupShields";
 import { OpponentShield } from "@/components/ui/OpponentShield";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
@@ -206,7 +207,7 @@ export default function MatchesScreen() {
     if (upData)   { upcomingMatch = { ...(upData as any), is_bot: (upData as any).is_bot ?? false } as ScheduledMatch; setUpcoming(upcomingMatch); }
     if (histData) { historyMatches = histData.map((m: any) => ({ ...m, pdl_delta: m.pdl_delta ?? 0 })) as PlayedMatch[]; setHistory(historyMatches); }
 
-    const teamIds = [upcomingMatch?.opponent_team_id, ...historyMatches.map((m) => m.opponent_team_id)];
+    const teamIds = [teamData.id, upcomingMatch?.opponent_team_id, ...historyMatches.map((m) => m.opponent_team_id)];
     fetchTeamShields(teamIds).then(setShields);
 
     setLoading(false);
@@ -356,9 +357,16 @@ export default function MatchesScreen() {
                     )}
                   </View>
 
+                  <View style={s.matchupRow}>
+                    <MatchupShields
+                      ownShield={team ? shields[team.id] ?? null : null}
+                      opponentShield={upcoming.opponent_team_id ? shields[upcoming.opponent_team_id] ?? null : null}
+                      size={32}
+                    />
+                  </View>
+
                   <View style={s.vsRow}>
                     <Text style={s.vsLabel}>vs.</Text>
-                    <OpponentShield shield={upcoming.opponent_team_id ? shields[upcoming.opponent_team_id] ?? null : null} size={28} />
                     <Text style={s.vsOpponent}>{upcoming.opponent_name}</Text>
                     {upcoming.is_bot && (
                       <Text style={s.botNote}>{t("matches.autoOpponent")}</Text>
@@ -704,6 +712,7 @@ const s = StyleSheet.create({
   botBadgeText: { fontSize: 9, fontWeight: "800", color: "#F59E0B" },
   botNote:      { fontSize: 10, color: "#4B5563", fontStyle: "italic" },
 
+  matchupRow: { marginBottom: 10 },
   vsRow:     { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 },
   vsLabel:   { fontSize: 12, color: "#6B7280", fontWeight: "700" },
   vsOpponent:{ fontSize: 20, fontWeight: "900", color: "#FFFFFF", flex: 1 },

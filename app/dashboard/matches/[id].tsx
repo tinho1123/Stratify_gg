@@ -1,3 +1,4 @@
+import { MatchupShields } from "@/components/ui/MatchupShields";
 import { OpponentShield } from "@/components/ui/OpponentShield";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
@@ -109,27 +110,32 @@ export default function MatchDetailScreen() {
   const [match, setMatch] = useState<MatchRow | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
+  const [ownShield, setOwnShield] = useState<TeamShield | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from("matches")
-        .select("id, opponent_name, opponent_team_id, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at, player_stats")
-        .eq("id", params.id)
-        .single();
+      const [{ data, error }, { data: teamData }] = await Promise.all([
+        supabase
+          .from("matches")
+          .select("id, opponent_name, opponent_team_id, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at, player_stats")
+          .eq("id", params.id)
+          .single(),
+        supabase.from("teams").select("id").single(),
+      ]);
       if (cancelled) return;
       if (error || !data) {
         setNotFound(true);
       } else {
         const m = data as MatchRow;
         setMatch(m);
-        if (m.opponent_team_id) {
-          fetchTeamShields([m.opponent_team_id]).then((shields) => {
-            if (!cancelled) setOpponentShield(shields[m.opponent_team_id!] ?? null);
-          });
-        }
+        const ownId = (teamData as any)?.id as string | undefined;
+        fetchTeamShields([ownId, m.opponent_team_id]).then((shields) => {
+          if (cancelled) return;
+          if (ownId) setOwnShield(shields[ownId] ?? null);
+          if (m.opponent_team_id) setOpponentShield(shields[m.opponent_team_id] ?? null);
+        });
       }
       setLoading(false);
     })();
@@ -184,6 +190,10 @@ export default function MatchDetailScreen() {
             </View>
           </View>
 
+          <View style={s.matchupRow}>
+            <MatchupShields ownShield={ownShield} opponentShield={opponentShield} size={36} />
+          </View>
+
           <View style={s.scoreRow}>
             <View style={s.scoreTeam}>
               <Text style={s.scoreTeamName} numberOfLines={1}>{t("matchDetail.yourTeamTitle")}</Text>
@@ -191,7 +201,6 @@ export default function MatchDetailScreen() {
             </View>
             <Text style={s.scoreDash}>–</Text>
             <View style={s.scoreTeam}>
-              <OpponentShield shield={opponentShield} size={32} />
               <Text style={s.scoreTeamName} numberOfLines={1}>{match.opponent_name.toUpperCase()}</Text>
               <Text style={[s.scoreNum, !won ? s.scoreWin : s.scoreLoss]}>{match.score_opp}</Text>
             </View>
@@ -358,6 +367,7 @@ const s = StyleSheet.create({
   heroWin:  { backgroundColor: "#0A1F14", borderColor: "#10B98133" },
   heroLoss: { backgroundColor: "#1A0A0A", borderColor: "#EF444433" },
   heroBadgeRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
+  matchupRow:   { marginBottom: 12 },
   scoreRow:     { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 16 },
   scoreTeam:    { alignItems: "center", flex: 1 },
   scoreTeamName:{ fontSize: 9, fontWeight: "800", color: "#6B7280", letterSpacing: 1, marginBottom: 4 },
