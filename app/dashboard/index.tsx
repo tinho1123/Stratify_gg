@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { OpponentShield } from "@/components/ui/OpponentShield";
 import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { getRatingColor, STATUS_COLOR, STATUS_LABEL_KEY } from "@/constants/playerStatus";
 import { supabase } from "@/database/supabase";
@@ -6,6 +7,7 @@ import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
 import { hasCompleteShield } from "@/lib/shield";
+import { fetchTeamShields, TeamShield } from "@/lib/shields";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -67,6 +69,7 @@ interface Notification {
 interface NextMatch {
   id: string;
   opponent_name: string;
+  opponent_team_id: string | null;
   match_type: string;
   scheduled_for: string;
 }
@@ -154,6 +157,7 @@ export default function HomeScreen() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notifOpen, setNotifOpen] = useState(false);
   const [nextMatch, setNextMatch] = useState<NextMatch | null>(null);
+  const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
   const [, setTick] = useState(0);
   const [claimingDaily, setClaimingDaily] = useState(false);
   const [shieldBannerDismissed, setShieldBannerDismissed] = useState(true);
@@ -261,14 +265,23 @@ export default function HomeScreen() {
 
     supabase
       .from("matches")
-      .select("id, opponent_name, match_type, scheduled_for")
+      .select("id, opponent_name, opponent_team_id, match_type, scheduled_for")
       .eq("status", "scheduled")
       .gte("scheduled_for", new Date().toISOString())
       .order("scheduled_for", { ascending: true })
       .limit(1)
       .single()
       .then(({ data, error }) => {
-        if (!error && data) setNextMatch(data as NextMatch);
+        if (!error && data) {
+          const nm = data as NextMatch;
+          setNextMatch(nm);
+          setOpponentShield(null);
+          if (nm.opponent_team_id) {
+            fetchTeamShields([nm.opponent_team_id]).then((shields) => {
+              setOpponentShield(shields[nm.opponent_team_id!] ?? null);
+            });
+          }
+        }
       });
   }, [loadNotifications]);
 
@@ -469,7 +482,10 @@ export default function HomeScreen() {
                   <Text style={styles.heroTitle}>
                     {nextMatch.match_type?.toUpperCase() ?? "PARTIDA"}
                   </Text>
-                  <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
+                  <View style={styles.heroOpponentRow}>
+                    <OpponentShield shield={opponentShield} size={28} />
+                    <Text style={styles.heroOpponent}>vs. {nextMatch.opponent_name}</Text>
+                  </View>
 
                   <View style={styles.countdown}>
                     {calcCountdown(nextMatch.scheduled_for).map((item, i) => (
@@ -946,12 +962,17 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     lineHeight: 30,
   },
+  heroOpponentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 18,
+  },
   heroOpponent: {
     fontSize: 14,
     fontWeight: "500",
     color: C.textSecondary,
-    marginTop: 4,
-    marginBottom: 18,
   },
   countdown: {
     flexDirection: "row",

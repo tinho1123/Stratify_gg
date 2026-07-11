@@ -1,10 +1,12 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
 import { LiveScorePill } from "@/components/ui/LiveScorePill";
+import { OpponentShield } from "@/components/ui/OpponentShield";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { getTierInfo } from "@/constants/tiers";
 import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { fetchTeamShields, TeamShield } from "@/lib/shields";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
@@ -54,6 +56,7 @@ export default function ChallengesScreen() {
   const [tierColor, setTierColor] = useState("#6B7280");
   const [rivals, setRivals]     = useState<RivalTeam[]>([]);
   const [challenges, setChallenges] = useState<TeamChallenge[]>([]);
+  const [shields, setShields] = useState<Record<string, TeamShield>>({});
 
   const [challengingId, setChallengingId] = useState<string | null>(null);
   const [respondingId, setRespondingId]   = useState<string | null>(null);
@@ -69,13 +72,15 @@ export default function ChallengesScreen() {
     setTierColor(info.color);
 
     const { data: seasonData } = await supabase.rpc("get_or_create_season", { p_tier: info.tier });
+    let rivalsList: RivalTeam[] = [];
     if (seasonData) {
       const { data: standingsData } = await supabase
         .from("season_standings")
         .select("team_id, team_name")
         .eq("season_id", (seasonData as any).id)
         .neq("team_id", team.id);
-      setRivals((standingsData ?? []) as RivalTeam[]);
+      rivalsList = (standingsData ?? []) as RivalTeam[];
+      setRivals(rivalsList);
     } else {
       setRivals([]);
     }
@@ -86,7 +91,16 @@ export default function ChallengesScreen() {
       .or(`challenger_team_id.eq.${team.id},opponent_team_id.eq.${team.id}`)
       .order("created_at", { ascending: false });
 
-    setChallenges((challengesData ?? []) as TeamChallenge[]);
+    const challengesList = (challengesData ?? []) as TeamChallenge[];
+    setChallenges(challengesList);
+
+    const teamIds = [
+      ...rivalsList.map((r) => r.team_id),
+      ...challengesList.map((c) => c.challenger_team_id),
+      ...challengesList.map((c) => c.opponent_team_id),
+    ];
+    fetchTeamShields(teamIds).then(setShields);
+
     setLoading(false);
   }, []);
 
@@ -152,6 +166,7 @@ export default function ChallengesScreen() {
               <Text style={s.sectionTitle}>{t("challenges.incomingTitle")}</Text>
               {incoming.map((c) => (
                 <View key={c.id} style={s.challengeCard}>
+                  <OpponentShield shield={shields[c.challenger_team_id] ?? null} size={28} />
                   <Text style={s.challengeName} numberOfLines={1}>{c.challenger_name}</Text>
                   <View style={s.respondRow}>
                     <TouchableOpacity
@@ -181,11 +196,13 @@ export default function ChallengesScreen() {
             <View style={s.section}>
               <Text style={s.sectionTitle}>{t("challenges.acceptedTitle")}</Text>
               {accepted.map((c) => {
+                const opponentTeamId = c.challenger_team_id === myTeamId ? c.opponent_team_id : c.challenger_team_id;
                 const opponentName = c.challenger_team_id === myTeamId ? c.opponent_name : c.challenger_name;
                 const dueNotYetLive = c.status === "accepted"
                   && !!c.scheduled_for && new Date(c.scheduled_for) <= new Date();
                 return (
                   <View key={c.id} style={s.challengeCard}>
+                    <OpponentShield shield={shields[opponentTeamId] ?? null} size={28} />
                     <Text style={s.challengeName} numberOfLines={1}>{t("challenges.vsPrefix")} {opponentName}</Text>
                     {c.status === "live" ? (
                       <LiveScorePill matchSource="challenge" matchId={c.id} />
@@ -206,6 +223,7 @@ export default function ChallengesScreen() {
               <Text style={s.sectionTitle}>{t("challenges.outgoingTitle")}</Text>
               {outgoing.map((c) => (
                 <View key={c.id} style={s.challengeCard}>
+                  <OpponentShield shield={shields[c.opponent_team_id] ?? null} size={28} />
                   <Text style={s.challengeName} numberOfLines={1}>{c.opponent_name}</Text>
                   <Text style={s.waitingNote}>{t("challenges.awaitingResponse")}</Text>
                 </View>
@@ -226,6 +244,7 @@ export default function ChallengesScreen() {
                 const disabled = pendingRivalIds.has(r.team_id) || challengingId === r.team_id;
                 return (
                   <View key={r.team_id} style={s.rivalRow}>
+                    <OpponentShield shield={shields[r.team_id] ?? null} size={24} />
                     <Text style={s.rivalName} numberOfLines={1}>{r.team_name}</Text>
                     <TouchableOpacity
                       style={[s.challengeBtn, disabled && s.challengeBtnDisabled]}
@@ -253,6 +272,7 @@ export default function ChallengesScreen() {
                 const myScore  = iAmChallenger ? c.score_challenger : c.score_opponent;
                 const oppScore = iAmChallenger ? c.score_opponent  : c.score_challenger;
                 const oppName  = iAmChallenger ? c.opponent_name   : c.challenger_name;
+                const oppTeamId = iAmChallenger ? c.opponent_team_id : c.challenger_team_id;
                 const won = c.winner_team_id === myTeamId;
                 return (
                   <View key={c.id} style={[s.historyCard, won ? s.historyCardWin : s.historyCardLoss]}>
@@ -260,6 +280,7 @@ export default function ChallengesScreen() {
                       {won ? t("challenges.resultWin") : t("challenges.resultLoss")}
                     </Text>
                     <Text style={s.historyScore}>{myScore} – {oppScore}</Text>
+                    <OpponentShield shield={shields[oppTeamId] ?? null} size={18} />
                     <Text style={s.historyOpponent} numberOfLines={1}>{t("challenges.vsPrefix")} {oppName}</Text>
                   </View>
                 );

@@ -1,8 +1,10 @@
+import { OpponentShield } from "@/components/ui/OpponentShield";
 import { RewardedAdButton } from "@/components/ui/RewardedAdButton";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
 import { MatchEvent, MatchRosterPlayer, useMatchLiveSession } from "@/hooks/useMatchLiveSession";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { fetchTeamShields, TeamShield } from "@/lib/shields";
 import { router } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -31,6 +33,7 @@ interface MatchInfo {
   id: string;
   fixture_id: string;
   opponent_name: string;
+  opponent_team_id: string | null;
   map: string;
 }
 
@@ -112,6 +115,7 @@ export default function LiveMatchScreen() {
   const [tab, setTab] = useState<"live" | "history">("live");
   const [loadingBase, setLoadingBase] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
 
   const liveScrollRef = useRef<ScrollView>(null);
   const historyScrollRef = useRef<ScrollView>(null);
@@ -130,7 +134,7 @@ export default function LiveMatchScreen() {
 
       const { data: matchData } = await supabase
         .from("matches")
-        .select("id, fixture_id, opponent_name, map")
+        .select("id, fixture_id, opponent_name, opponent_team_id, map")
         .eq("team_id", (teamData as any).id)
         .in("status", ["scheduled", "live", "played"])
         .order("scheduled_for", { ascending: false })
@@ -138,7 +142,13 @@ export default function LiveMatchScreen() {
         .maybeSingle();
 
       if (!matchData) { setErrorMsg(t("live.errNoMatchReady")); setLoadingBase(false); return; }
-      setMatch(matchData as MatchInfo);
+      const m = matchData as MatchInfo;
+      setMatch(m);
+      if (m.opponent_team_id) {
+        fetchTeamShields([m.opponent_team_id]).then((shields) => {
+          setOpponentShield(shields[m.opponent_team_id!] ?? null);
+        });
+      }
       setLoadingBase(false);
     })();
   }, [t]);
@@ -268,6 +278,7 @@ export default function LiveMatchScreen() {
               </View>
               <Text style={s.scoreDash}>–</Text>
               <View style={s.scoreTeam}>
+                <OpponentShield shield={opponentShield} size={32} />
                 <Text style={s.scoreTeamName} numberOfLines={1}>{match?.opponent_name.toUpperCase()}</Text>
                 <Text style={[s.scoreNum, !won ? s.scoreWin : s.scoreLoss]}>{finalResult.score_opp}</Text>
               </View>
@@ -331,7 +342,7 @@ export default function LiveMatchScreen() {
           )}
 
           <ScoreboardTable title={team.name.toUpperCase()} stats={ownStats} accent="#10B981" playerCol={t("live.playerCol")} mvpLabel="MVP" />
-          <ScoreboardTable title={match?.opponent_name.toUpperCase() ?? t("live.opponentFallback")} stats={oppStats} accent="#EF4444" playerCol={t("live.playerCol")} mvpLabel="MVP" />
+          <ScoreboardTable title={match?.opponent_name.toUpperCase() ?? t("live.opponentFallback")} shield={opponentShield} stats={oppStats} accent="#EF4444" playerCol={t("live.playerCol")} mvpLabel="MVP" />
 
           <View style={{ marginBottom: 10 }}>
             <RewardedAdButton />
@@ -369,7 +380,7 @@ export default function LiveMatchScreen() {
       <View style={s.rosters}>
         <RosterColumn label={t("live.yourTeam")} players={ownRoster ?? []} aliveIds={aliveOwn} align="left" accent="#10B981" />
         <View style={s.rostersDivider} />
-        <RosterColumn label={match?.opponent_name ?? t("live.opponentFallback")} players={oppRoster ?? []} aliveIds={aliveOpp} align="right" accent="#EF4444" />
+        <RosterColumn label={match?.opponent_name ?? t("live.opponentFallback")} shield={opponentShield} players={oppRoster ?? []} aliveIds={aliveOpp} align="right" accent="#EF4444" />
       </View>
 
       {/* ── TABS ────────────────────────────────────────── */}
@@ -408,9 +419,10 @@ export default function LiveMatchScreen() {
 // ── Subcomponents ────────────────────────────────────────────────────────────
 
 function RosterColumn({
-  label, players, aliveIds, align, accent,
+  label, shield, players, aliveIds, align, accent,
 }: {
   label: string;
+  shield?: TeamShield | null;
   players: MatchRosterPlayer[];
   aliveIds: string[];
   align: "left" | "right";
@@ -418,7 +430,10 @@ function RosterColumn({
 }) {
   return (
     <View style={s.rosterCol}>
-      <Text style={[s.rosterLabel, { color: accent, textAlign: align }]} numberOfLines={1}>{label}</Text>
+      <View style={[s.rosterLabelRow, align === "right" && { flexDirection: "row-reverse" }]}>
+        {shield !== undefined && <OpponentShield shield={shield} size={16} />}
+        <Text style={[s.rosterLabel, { color: accent, textAlign: align }]} numberOfLines={1}>{label}</Text>
+      </View>
       {players.map((p) => {
         const alive = aliveIds.includes(p.id);
         return (
@@ -452,11 +467,14 @@ function FeedRow({ ev, showRound }: { ev: FeedItem; showRound?: boolean }) {
 }
 
 function ScoreboardTable({
-  title, stats, accent, playerCol, mvpLabel,
-}: { title: string; stats: StatLine[]; accent: string; playerCol: string; mvpLabel: string }) {
+  title, shield, stats, accent, playerCol, mvpLabel,
+}: { title: string; shield?: TeamShield | null; stats: StatLine[]; accent: string; playerCol: string; mvpLabel: string }) {
   return (
     <View style={s.statsTable}>
-      <Text style={[s.statsTableTitle, { color: accent }]}>{title}</Text>
+      <View style={s.statsTableTitleRow}>
+        {shield !== undefined && <OpponentShield shield={shield} size={16} />}
+        <Text style={[s.statsTableTitle, { color: accent }]}>{title}</Text>
+      </View>
       <View style={s.statsHeader}>
         <Text style={[s.statsCol, { flex: 1, textAlign: "left" }]}>{playerCol}</Text>
         <Text style={s.statsCol}>K</Text>
@@ -517,7 +535,8 @@ const s = StyleSheet.create({
     borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#141414",
   },
   rosterCol: { flex: 1, gap: 6 },
-  rosterLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, marginBottom: 4 },
+  rosterLabelRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
+  rosterLabel: { fontSize: 10, fontWeight: "900", letterSpacing: 1, flexShrink: 1 },
   rosterRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   rosterDot: { width: 6, height: 6, borderRadius: 3 },
   rosterName: { flex: 1, fontSize: 11, color: "#D1D5DB" },
@@ -583,7 +602,8 @@ const s = StyleSheet.create({
   mvpStatLabel: { fontSize: 9, color: "#4B5563", fontWeight: "700", marginTop: 2 },
 
   statsTable: { marginBottom: 14 },
-  statsTableTitle: { fontSize: 11, fontWeight: "900", letterSpacing: 1, marginBottom: 8 },
+  statsTableTitleRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  statsTableTitle: { fontSize: 11, fontWeight: "900", letterSpacing: 1 },
   statsHeader: { flexDirection: "row", paddingHorizontal: 4, marginBottom: 4 },
   statsCol: { width: 40, fontSize: 9, fontWeight: "800", color: "#4B5563", textAlign: "center" },
   statsRow: {

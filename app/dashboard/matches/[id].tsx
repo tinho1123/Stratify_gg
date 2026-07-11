@@ -1,6 +1,8 @@
+import { OpponentShield } from "@/components/ui/OpponentShield";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { supabase } from "@/database/supabase";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { fetchTeamShields, TeamShield } from "@/lib/shields";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
@@ -43,6 +45,7 @@ interface MatchReport {
 interface MatchRow {
   id: string;
   opponent_name: string;
+  opponent_team_id: string | null;
   result: "win" | "loss";
   score_own: number;
   score_opp: number;
@@ -105,6 +108,7 @@ export default function MatchDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [match, setMatch] = useState<MatchRow | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [opponentShield, setOpponentShield] = useState<TeamShield | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,14 +116,20 @@ export default function MatchDetailScreen() {
       setLoading(true);
       const { data, error } = await supabase
         .from("matches")
-        .select("id, opponent_name, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at, player_stats")
+        .select("id, opponent_name, opponent_team_id, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at, player_stats")
         .eq("id", params.id)
         .single();
       if (cancelled) return;
       if (error || !data) {
         setNotFound(true);
       } else {
-        setMatch(data as MatchRow);
+        const m = data as MatchRow;
+        setMatch(m);
+        if (m.opponent_team_id) {
+          fetchTeamShields([m.opponent_team_id]).then((shields) => {
+            if (!cancelled) setOpponentShield(shields[m.opponent_team_id!] ?? null);
+          });
+        }
       }
       setLoading(false);
     })();
@@ -181,6 +191,7 @@ export default function MatchDetailScreen() {
             </View>
             <Text style={s.scoreDash}>–</Text>
             <View style={s.scoreTeam}>
+              <OpponentShield shield={opponentShield} size={32} />
               <Text style={s.scoreTeamName} numberOfLines={1}>{match.opponent_name.toUpperCase()}</Text>
               <Text style={[s.scoreNum, !won ? s.scoreWin : s.scoreLoss]}>{match.score_opp}</Text>
             </View>
@@ -248,7 +259,7 @@ export default function MatchDetailScreen() {
 
             <Text style={s.sectionTitle}>{t("matchDetail.scoreboardTitle")}</Text>
             <ScoreboardTable title={t("matchDetail.yourTeamTitle")} stats={report.own} accent="#10B981" playerCol={t("matchDetail.playerCol")} />
-            <ScoreboardTable title={match.opponent_name.toUpperCase()} stats={report.opp} accent="#EF4444" playerCol={t("matchDetail.playerCol")} />
+            <ScoreboardTable title={match.opponent_name.toUpperCase()} shield={opponentShield} stats={report.opp} accent="#EF4444" playerCol={t("matchDetail.playerCol")} />
 
             {report.events.length > 0 && (
               <>
@@ -283,11 +294,14 @@ export default function MatchDetailScreen() {
 // ── Subcomponents ────────────────────────────────────────────────────────────
 
 function ScoreboardTable({
-  title, stats, accent, playerCol,
-}: { title: string; stats: StatLine[]; accent: string; playerCol: string }) {
+  title, shield, stats, accent, playerCol,
+}: { title: string; shield?: TeamShield | null; stats: StatLine[]; accent: string; playerCol: string }) {
   return (
     <View style={s.statsTable}>
-      <Text style={[s.statsTableTitle, { color: accent }]}>{title}</Text>
+      <View style={s.statsTableTitleRow}>
+        {shield !== undefined && <OpponentShield shield={shield} size={18} />}
+        <Text style={[s.statsTableTitle, { color: accent }]}>{title}</Text>
+      </View>
       <View style={s.statsHeader}>
         <Text style={[s.statsCol, { flex: 1, textAlign: "left" }]}>{playerCol}</Text>
         <Text style={s.statsCol}>K</Text>
@@ -387,8 +401,11 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: "#1A1A1A",
     overflow: "hidden", marginBottom: 12,
   },
+  statsTableTitleRow: {
+    flexDirection: "row", alignItems: "center", gap: 6, padding: 12, paddingBottom: 8,
+  },
   statsTableTitle: {
-    fontSize: 10, fontWeight: "900", letterSpacing: 1.5, padding: 12, paddingBottom: 8,
+    fontSize: 10, fontWeight: "900", letterSpacing: 1.5,
   },
   statsHeader: {
     flexDirection: "row", alignItems: "center",

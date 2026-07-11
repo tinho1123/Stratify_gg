@@ -1,4 +1,5 @@
 import { useAppAlert } from "@/components/ui/AppAlert";
+import { OpponentShield } from "@/components/ui/OpponentShield";
 import { ScreenHeader } from "@/components/ui/ScreenHeader";
 import { TutorialOverlay } from "@/components/ui/TutorialOverlay";
 import { getTierInfo, TierInfo } from "@/constants/tiers";
@@ -6,6 +7,7 @@ import { supabase } from "@/database/supabase";
 import { useFeatureFlags } from "@/hooks/useFeatureFlags";
 import { TutorialStepDef, useScreenTutorial } from "@/hooks/useScreenTutorial";
 import { useLanguage } from "@/i18n/LanguageContext";
+import { fetchTeamShields, TeamShield } from "@/lib/shields";
 import { useFocusEffect } from "@react-navigation/native";
 import { router } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -42,6 +44,7 @@ interface Player {
 interface ScheduledMatch {
   id: string;
   opponent_name: string;
+  opponent_team_id: string | null;
   opponent_rating: number;
   scheduled_for: string;
   map: string;
@@ -53,6 +56,7 @@ interface ScheduledMatch {
 interface PlayedMatch {
   id: string;
   opponent_name: string;
+  opponent_team_id: string | null;
   opponent_rating: number;
   result: "win" | "loss";
   score_own: number;
@@ -126,6 +130,7 @@ export default function MatchesScreen() {
   const [history,   setHistory]   = useState<PlayedMatch[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [shields, setShields] = useState<Record<string, TeamShield>>({});
 
   const [countdown, setCountdown] = useState({ h: 0, m: 0, s: 0, expired: false });
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -180,7 +185,7 @@ export default function MatchesScreen() {
         .order("rating", { ascending: false }),
       supabase
         .from("matches")
-        .select("id, opponent_name, opponent_rating, scheduled_for, map, match_type, status, is_bot")
+        .select("id, opponent_name, opponent_team_id, opponent_rating, scheduled_for, map, match_type, status, is_bot")
         .eq("team_id", teamData.id)
         .eq("status", "scheduled")
         .order("scheduled_for", { ascending: true })
@@ -188,16 +193,21 @@ export default function MatchesScreen() {
         .single(),
       supabase
         .from("matches")
-        .select("id, opponent_name, opponent_rating, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at")
+        .select("id, opponent_name, opponent_team_id, opponent_rating, result, score_own, score_opp, map, match_type, fans_delta, budget_delta, pdl_delta, played_at")
         .eq("team_id", teamData.id)
         .eq("status", "played")
         .order("played_at", { ascending: false })
         .limit(20),
     ]);
 
+    let upcomingMatch: ScheduledMatch | null = null;
+    let historyMatches: PlayedMatch[] = [];
     if (pData)    setPlayers(pData as Player[]);
-    if (upData)   setUpcoming({ ...(upData as any), is_bot: (upData as any).is_bot ?? false } as ScheduledMatch);
-    if (histData) setHistory(histData.map((m: any) => ({ ...m, pdl_delta: m.pdl_delta ?? 0 })) as PlayedMatch[]);
+    if (upData)   { upcomingMatch = { ...(upData as any), is_bot: (upData as any).is_bot ?? false } as ScheduledMatch; setUpcoming(upcomingMatch); }
+    if (histData) { historyMatches = histData.map((m: any) => ({ ...m, pdl_delta: m.pdl_delta ?? 0 })) as PlayedMatch[]; setHistory(historyMatches); }
+
+    const teamIds = [upcomingMatch?.opponent_team_id, ...historyMatches.map((m) => m.opponent_team_id)];
+    fetchTeamShields(teamIds).then(setShields);
 
     setLoading(false);
   }, []);
@@ -348,6 +358,7 @@ export default function MatchesScreen() {
 
                   <View style={s.vsRow}>
                     <Text style={s.vsLabel}>vs.</Text>
+                    <OpponentShield shield={upcoming.opponent_team_id ? shields[upcoming.opponent_team_id] ?? null : null} size={28} />
                     <Text style={s.vsOpponent}>{upcoming.opponent_name}</Text>
                     {upcoming.is_bot && (
                       <Text style={s.botNote}>{t("matches.autoOpponent")}</Text>
@@ -507,7 +518,10 @@ export default function MatchesScreen() {
                           <Text style={{ color: "#374151" }}> – </Text>
                           <Text style={{ color: won ? "#374151" : "#EF4444" }}>{m.score_opp}</Text>
                         </Text>
-                        <Text style={s.histOpponent}>vs. {m.opponent_name}</Text>
+                        <View style={s.histOpponentRow}>
+                          <OpponentShield shield={m.opponent_team_id ? shields[m.opponent_team_id] ?? null : null} size={16} />
+                          <Text style={s.histOpponent}>vs. {m.opponent_name}</Text>
+                        </View>
                       </View>
                     </View>
 
@@ -785,7 +799,8 @@ const s = StyleSheet.create({
   },
   resultBadgeText: { fontSize: 13, fontWeight: "900" },
   histScore:    { fontSize: 16, fontWeight: "900", color: "#FFFFFF" },
-  histOpponent: { fontSize: 11, color: "#6B7280", marginTop: 2 },
+  histOpponentRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
+  histOpponent: { fontSize: 11, color: "#6B7280" },
   histCenter:   { alignItems: "center", gap: 5, paddingHorizontal: 8 },
   histRight:    { alignItems: "flex-end", gap: 4 },
   histDate:     { fontSize: 9, color: "#374151" },
