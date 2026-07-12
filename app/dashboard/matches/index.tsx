@@ -46,7 +46,7 @@ interface ScheduledMatch {
   scheduled_for: string;
   map: string;
   match_type: string;
-  status: "scheduled" | "played" | "cancelled";
+  status: "scheduled" | "live" | "played" | "cancelled";
   is_bot: boolean;
 }
 
@@ -182,7 +182,7 @@ export default function MatchesScreen() {
         .from("matches")
         .select("id, opponent_name, opponent_rating, scheduled_for, map, match_type, status, is_bot")
         .eq("team_id", teamData.id)
-        .eq("status", "scheduled")
+        .in("status", ["scheduled", "live"])
         .order("scheduled_for", { ascending: true })
         .limit(1)
         .single(),
@@ -249,6 +249,11 @@ export default function MatchesScreen() {
 
   const mapColor  = upcoming ? (MAP_COLOR[upcoming.map]         ?? "#6B7280") : "#6B7280";
   const typeColor = upcoming ? (TYPE_COLOR[upcoming.match_type] ?? "#6B7280") : "#6B7280";
+  // Já virou 'live' no servidor (kickoff do cron) ou o horário já passou — nos dois casos dá
+  // pra assistir. Sem isso, uma partida que já foi pro engine ao vivo mas cujo cron de kickoff
+  // ainda não rodou localmente ficava invisível aqui, e o botão "Solicitar Partida" sempre
+  // falhava (generate_next_match rejeita times com partida 'scheduled'/'live' em aberto).
+  const isReady = countdown.expired || upcoming?.status === "live";
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -325,8 +330,8 @@ export default function MatchesScreen() {
             <Text style={s.sectionTitle}>{t("matches.nextMatchTitle")}</Text>
 
             {upcoming ? (
-              <View style={[s.upcomingCard, countdown.expired && s.upcomingCardReady]}>
-                <View style={[s.upcomingAccent, { backgroundColor: countdown.expired ? "#EC4899" : typeColor }]} />
+              <View style={[s.upcomingCard, isReady && s.upcomingCardReady]}>
+                <View style={[s.upcomingAccent, { backgroundColor: isReady ? "#EC4899" : typeColor }]} />
 
                 <View style={s.upcomingBody}>
                   <View style={s.upcomingBadgeRow}>
@@ -378,7 +383,7 @@ export default function MatchesScreen() {
                     );
                   })()}
 
-                  {countdown.expired ? (
+                  {isReady ? (
                     <TouchableOpacity
                       style={s.readyBtn}
                       onPress={() => router.push("/dashboard/matches/live")}
